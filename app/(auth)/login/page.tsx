@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Monitor, Eye, EyeOff, Loader2 } from "lucide-react"
+import { Monitor, Eye, EyeOff, Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -140,6 +140,21 @@ export default function LoginPage() {
                 ) : (
                   "Sign in"
                 )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  // Clear any stored session/tokens
+                  localStorage.removeItem("token")
+                  sessionStorage.clear()
+                  router.push("/login")
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
