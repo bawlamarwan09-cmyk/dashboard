@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, Monitor, AlertCircle, Info } from "lucide-react"
+import { ArrowLeft, Monitor, AlertCircle, Info, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -48,6 +48,18 @@ const devices = [
 ]
 
 export default function ReportProblemPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <ReportProblemForm />
+    </Suspense>
+  )
+}
+
+function ReportProblemForm() {
   const searchParams = useSearchParams()
   const preselectedDevice = searchParams.get("device")
   
