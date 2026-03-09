@@ -12,6 +12,7 @@ import {
   Wrench,
   Calendar,
   ChevronRight,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,78 +33,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-
-const problems = [
-  {
-    id: "PRB-001",
-    device: "Dell OptiPlex 7090",
-    deviceType: "PC",
-    reportedBy: "John Doe",
-    status: "Open",
-    date: "2024-03-15",
-    assignedOperator: "Mike Tech",
-    description: "Screen flickering intermittently",
-  },
-  {
-    id: "PRB-002",
-    device: "HP EliteBook 840",
-    deviceType: "Laptop",
-    reportedBy: "Jane Smith",
-    status: "In Progress",
-    date: "2024-03-14",
-    assignedOperator: "Sarah Admin",
-    description: "Battery not charging properly",
-  },
-  {
-    id: "PRB-003",
-    device: "Canon imageRUNNER C3226i",
-    deviceType: "Printer",
-    reportedBy: "IT Department",
-    status: "Shipped",
-    date: "2024-03-12",
-    assignedOperator: "Mike Tech",
-    description: "Paper jam and error codes",
-  },
-  {
-    id: "PRB-004",
-    device: "LG 27UK850-W",
-    deviceType: "Monitor",
-    reportedBy: "Mike Johnson",
-    status: "Resolved",
-    date: "2024-03-10",
-    assignedOperator: "Sarah Admin",
-    description: "Dead pixels on display",
-  },
-  {
-    id: "PRB-005",
-    device: "Lenovo ThinkCentre M920",
-    deviceType: "PC",
-    reportedBy: "Emma Wilson",
-    status: "Open",
-    date: "2024-03-15",
-    assignedOperator: "Unassigned",
-    description: "System runs very slow",
-  },
-  {
-    id: "PRB-006",
-    device: "Apple MacBook Pro 14",
-    deviceType: "Laptop",
-    reportedBy: "Sarah Wilson",
-    status: "In Progress",
-    date: "2024-03-13",
-    assignedOperator: "Mike Tech",
-    description: "Keyboard keys not responding",
-  },
-]
+import { useProblems } from "@/lib/hooks/use-api"
 
 const getStatusInfo = (status: string) => {
-  switch (status.toLowerCase()) {
+  switch (status?.toLowerCase()) {
     case "open":
       return {
         icon: AlertCircle,
         color: "text-destructive",
         bgColor: "bg-destructive/10",
       }
+    case "in_progress":
     case "in progress":
       return {
         icon: Wrench,
@@ -117,6 +57,7 @@ const getStatusInfo = (status: string) => {
         bgColor: "bg-primary/10",
       }
     case "resolved":
+    case "closed":
       return {
         icon: CheckCircle2,
         color: "text-success",
@@ -131,21 +72,50 @@ const getStatusInfo = (status: string) => {
   }
 }
 
+const formatStatus = (status: string) => {
+  switch (status?.toLowerCase()) {
+    case "in_progress":
+      return "In Progress"
+    default:
+      return status?.charAt(0).toUpperCase() + status?.slice(1)
+  }
+}
+
 export default function ProblemsPage() {
+  const { data: problems, isLoading, error } = useProblems()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [typeFilter, setTypeFilter] = useState("all")
+  const [priorityFilter, setPriorityFilter] = useState("all")
 
-  const filteredProblems = problems.filter((problem) => {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+        Failed to load problems. Please try again.
+      </div>
+    )
+  }
+
+  const problemList = problems || []
+
+  const filteredProblems = problemList.filter((problem) => {
     const matchesSearch =
-      problem.device.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.reportedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.id.toLowerCase().includes(searchQuery.toLowerCase())
+      problem.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      problem.deviceName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      problem.reportedByName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      problem.id?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus =
-      statusFilter === "all" || problem.status.toLowerCase() === statusFilter.toLowerCase()
-    const matchesType =
-      typeFilter === "all" || problem.deviceType.toLowerCase() === typeFilter.toLowerCase()
-    return matchesSearch && matchesStatus && matchesType
+      statusFilter === "all" || problem.status?.toLowerCase() === statusFilter.toLowerCase()
+    const matchesPriority =
+      priorityFilter === "all" || problem.priority?.toLowerCase() === priorityFilter.toLowerCase()
+    return matchesSearch && matchesStatus && matchesPriority
   })
 
   return (
@@ -182,21 +152,21 @@ export default function ProblemsPage() {
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in progress">In Progress</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="resolved">Resolved</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
             <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Device Type" />
+              <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="pc">PC</SelectItem>
-              <SelectItem value="laptop">Laptop</SelectItem>
-              <SelectItem value="printer">Printer</SelectItem>
-              <SelectItem value="monitor">Monitor</SelectItem>
+              <SelectItem value="all">All Priority</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -207,7 +177,7 @@ export default function ProblemsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Problem ID</TableHead>
-              <TableHead>Device</TableHead>
+              <TableHead>Title / Device</TableHead>
               <TableHead className="hidden md:table-cell">Reported By</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Date</TableHead>
@@ -216,60 +186,68 @@ export default function ProblemsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProblems.map((problem) => {
-              const statusInfo = getStatusInfo(problem.status)
-              const StatusIcon = statusInfo.icon
-              return (
-                <TableRow key={problem.id} className="cursor-pointer hover:bg-muted/50">
-                  <TableCell className="font-mono text-sm font-medium">{problem.id}</TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium text-foreground">{problem.device}</p>
-                      <p className="text-sm text-muted-foreground">{problem.deviceType}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">
-                    {problem.reportedBy}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={cn(
-                        "flex w-fit items-center gap-1",
-                        statusInfo.bgColor,
-                        statusInfo.color,
-                        `hover:${statusInfo.bgColor}`
-                      )}
-                    >
-                      <StatusIcon className="h-3 w-3" />
-                      {problem.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {problem.date}
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell text-muted-foreground">
-                    {problem.assignedOperator}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/dashboard/problems/${problem.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View
-                        <ChevronRight className="ml-1 h-4 w-4" />
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+            {filteredProblems.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  No problems found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredProblems.map((problem) => {
+                const statusInfo = getStatusInfo(problem.status)
+                const StatusIcon = statusInfo.icon
+                return (
+                  <TableRow key={problem.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell className="font-mono text-sm font-medium">{problem.id}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium text-foreground">{problem.title}</p>
+                        <p className="text-sm text-muted-foreground">{problem.deviceName}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground">
+                      {problem.reportedByName}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "flex w-fit items-center gap-1",
+                          statusInfo.bgColor,
+                          statusInfo.color,
+                          `hover:${statusInfo.bgColor}`
+                        )}
+                      >
+                        <StatusIcon className="h-3 w-3" />
+                        {formatStatus(problem.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        {new Date(problem.createdAt).toLocaleDateString()}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-muted-foreground">
+                      {problem.assignedToName || "Unassigned"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/dashboard/problems/${problem.id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>Showing {filteredProblems.length} of {problems.length} problems</p>
+        <p>Showing {filteredProblems.length} of {problemList.length} problems</p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled>
             Previous

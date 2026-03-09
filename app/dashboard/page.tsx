@@ -1,4 +1,6 @@
-import { Monitor, AlertCircle, Wrench, Truck, CheckCircle2 } from "lucide-react"
+"use client"
+
+import { Monitor, AlertCircle, Wrench, Truck, CheckCircle2, Loader2 } from "lucide-react"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import {
@@ -6,8 +8,27 @@ import {
   ProblemsByDeviceChart,
   RepairTrendChart,
 } from "@/components/dashboard/dashboard-charts"
+import { useDashboardStats } from "@/lib/hooks/use-api"
 
 export default function DashboardPage() {
+  const { data: stats, isLoading, error } = useDashboardStats()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+        Failed to load dashboard data. Please try again.
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -20,7 +41,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard
           title="Total Devices"
-          value={248}
+          value={stats?.totalDevices ?? 0}
           change="+12 this month"
           changeType="positive"
           icon={Monitor}
@@ -28,7 +49,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Active Problems"
-          value={24}
+          value={stats?.activeProblems ?? 0}
           change="+3 today"
           changeType="negative"
           icon={AlertCircle}
@@ -36,7 +57,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Under Repair"
-          value={18}
+          value={stats?.pendingInterventions ?? 0}
           change="5 internal, 13 external"
           changeType="neutral"
           icon={Wrench}
@@ -52,7 +73,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Resolved"
-          value={156}
+          value={stats?.resolvedThisMonth ?? 0}
           change="+45 this month"
           changeType="positive"
           icon={CheckCircle2}

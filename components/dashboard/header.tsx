@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Search, Moon, Sun, Menu } from "lucide-react"
+import { Bell, Search, Moon, Sun, Menu, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useTheme } from "next-themes"
 import { useState, useEffect } from "react"
+import { useAuth } from "@/lib/auth-context"
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -22,11 +23,18 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const { theme, setTheme } = useTheme()
+  const { user, logout } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  const userInitials = user
+    ? `${user.firstName?.charAt(0) || ""}${user.lastName?.charAt(0) || ""}`.toUpperCase()
+    : "JD"
+  const userName = user ? `${user.firstName} ${user.lastName}` : "John Doe"
+  const userEmail = user?.email || "john.doe@company.com"
 
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
@@ -98,9 +106,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
               <Avatar className="h-9 w-9">
-                <AvatarImage src="/avatars/user.png" alt="User" />
+                <AvatarImage src={user?.avatar || "/avatars/user.png"} alt={userName} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                  JD
+                  {userInitials}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -108,9 +116,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">John Doe</p>
+                <p className="text-sm font-medium">{userName}</p>
                 <p className="text-xs text-muted-foreground">
-                  john.doe@company.com
+                  {userEmail}
                 </p>
               </div>
             </DropdownMenuLabel>
@@ -118,7 +126,8 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-destructive" onClick={logout}>
+              <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

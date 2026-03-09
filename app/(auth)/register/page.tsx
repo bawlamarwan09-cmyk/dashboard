@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Monitor, Eye, EyeOff, Loader2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 
 const passwordRequirements = [
   { id: "length", label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -19,7 +19,7 @@ const passwordRequirements = [
 ]
 
 export default function RegisterPage() {
-  const router = useRouter()
+  const { register, isLoading: authLoading } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -52,11 +52,19 @@ export default function RegisterPage() {
 
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // Demo: Redirect to dashboard after registration
-    router.push("/dashboard")
+    try {
+      await register({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        password: formData.password,
+        company: formData.company,
+        role: formData.role,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -91,7 +99,7 @@ export default function RegisterPage() {
                     placeholder="John"
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                     required
                   />
                 </div>
@@ -102,7 +110,7 @@ export default function RegisterPage() {
                     placeholder="Doe"
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                     required
                   />
                 </div>
@@ -116,7 +124,7 @@ export default function RegisterPage() {
                   placeholder="name@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                   required
                 />
               </div>
@@ -128,7 +136,7 @@ export default function RegisterPage() {
                   placeholder="Company name"
                   value={formData.company}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                   required
                 />
               </div>
@@ -138,7 +146,7 @@ export default function RegisterPage() {
                 <Select
                   value={formData.role}
                   onValueChange={(value) => setFormData({ ...formData, role: value })}
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                 >
                   <SelectTrigger id="role">
                     <SelectValue placeholder="Select your role" />
@@ -161,7 +169,7 @@ export default function RegisterPage() {
                     placeholder="Create a password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                     required
                   />
                   <Button
@@ -170,7 +178,7 @@ export default function RegisterPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -216,7 +224,7 @@ export default function RegisterPage() {
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                     required
                   />
                   <Button
@@ -225,7 +233,7 @@ export default function RegisterPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -244,7 +252,7 @@ export default function RegisterPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
