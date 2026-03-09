@@ -13,6 +13,7 @@ import {
   Pencil,
   Trash2,
   UserPlus,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,82 +50,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-
-const devices = [
-  {
-    id: "DEV-001",
-    type: "PC",
-    brand: "Dell",
-    model: "OptiPlex 7090",
-    inventoryNumber: "INV-2024-001",
-    serialNumber: "D3LL7090X1234",
-    status: "Active",
-    assignedUser: "John Doe",
-  },
-  {
-    id: "DEV-002",
-    type: "Laptop",
-    brand: "HP",
-    model: "EliteBook 840",
-    inventoryNumber: "INV-2024-002",
-    serialNumber: "HP840G8Y5678",
-    status: "Active",
-    assignedUser: "Jane Smith",
-  },
-  {
-    id: "DEV-003",
-    type: "Printer",
-    brand: "Canon",
-    model: "imageRUNNER C3226i",
-    inventoryNumber: "INV-2024-003",
-    serialNumber: "CAN3226Z9012",
-    status: "Under Repair",
-    assignedUser: "IT Department",
-  },
-  {
-    id: "DEV-004",
-    type: "Monitor",
-    brand: "LG",
-    model: "27UK850-W",
-    inventoryNumber: "INV-2024-004",
-    serialNumber: "LG27UK3456",
-    status: "Active",
-    assignedUser: "Mike Johnson",
-  },
-  {
-    id: "DEV-005",
-    type: "PC",
-    brand: "Lenovo",
-    model: "ThinkCentre M920",
-    inventoryNumber: "INV-2024-005",
-    serialNumber: "LEN920Q7890",
-    status: "Inactive",
-    assignedUser: "Unassigned",
-  },
-  {
-    id: "DEV-006",
-    type: "Laptop",
-    brand: "Apple",
-    model: "MacBook Pro 14",
-    inventoryNumber: "INV-2024-006",
-    serialNumber: "APPMB14X1234",
-    status: "Active",
-    assignedUser: "Sarah Wilson",
-  },
-  {
-    id: "DEV-007",
-    type: "Printer",
-    brand: "HP",
-    model: "LaserJet Pro M404",
-    inventoryNumber: "INV-2024-007",
-    serialNumber: "HPM404Y5678",
-    status: "Shipped",
-    assignedUser: "Finance Dept",
-  },
-]
+import { useDevices } from "@/lib/hooks/use-api"
+import { devicesApi, Device } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
+import { mutate } from "swr"
 
 const getDeviceIcon = (type: string) => {
-  switch (type.toLowerCase()) {
+  switch (type?.toLowerCase()) {
     case "laptop":
       return Laptop
     case "printer":
@@ -135,34 +67,95 @@ const getDeviceIcon = (type: string) => {
 }
 
 const getStatusBadge = (status: string) => {
-  switch (status.toLowerCase()) {
+  switch (status?.toLowerCase()) {
+    case "operational":
     case "active":
-      return <Badge className="bg-success/10 text-success hover:bg-success/20">{status}</Badge>
+      return <Badge className="bg-success/10 text-success hover:bg-success/20">Active</Badge>
+    case "in_repair":
     case "under repair":
-      return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">{status}</Badge>
+      return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">Under Repair</Badge>
     case "shipped":
-      return <Badge className="bg-primary/10 text-primary hover:bg-primary/20">{status}</Badge>
+      return <Badge className="bg-primary/10 text-primary hover:bg-primary/20">Shipped</Badge>
+    case "decommissioned":
     case "inactive":
-      return <Badge variant="secondary">{status}</Badge>
+      return <Badge variant="secondary">Inactive</Badge>
     default:
       return <Badge variant="outline">{status}</Badge>
   }
 }
 
 export default function DevicesPage() {
+  const { token } = useAuth()
+  const { data: devices, isLoading, error } = useDevices()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [newDevice, setNewDevice] = useState({
+    type: "",
+    brand: "",
+    model: "",
+    inventoryNumber: "",
+    serialNumber: "",
+  })
 
-  const filteredDevices = devices.filter((device) => {
+  const handleAddDevice = async () => {
+    if (!token) return
+    setIsSubmitting(true)
+    try {
+      await devicesApi.create({
+        name: `${newDevice.brand} ${newDevice.model}`,
+        type: newDevice.type as Device["type"],
+        inventoryNumber: newDevice.inventoryNumber,
+        serialNumber: newDevice.serialNumber,
+        status: "operational",
+      }, token)
+      mutate(["devices", token])
+      setAddDialogOpen(false)
+      setNewDevice({ type: "", brand: "", model: "", inventoryNumber: "", serialNumber: "" })
+    } catch (err) {
+      console.error("Failed to add device:", err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDeleteDevice = async (id: string) => {
+    if (!token) return
+    try {
+      await devicesApi.delete(id, token)
+      mutate(["devices", token])
+    } catch (err) {
+      console.error("Failed to delete device:", err)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
+        Failed to load devices. Please try again.
+      </div>
+    )
+  }
+
+  const deviceList = devices || []
+
+  const filteredDevices = deviceList.filter((device) => {
     const matchesSearch =
-      device.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      device.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      device.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      device.inventoryNumber.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = typeFilter === "all" || device.type.toLowerCase() === typeFilter.toLowerCase()
-    const matchesStatus = statusFilter === "all" || device.status.toLowerCase() === statusFilter.toLowerCase()
+      device.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      device.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      device.inventoryNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesType = typeFilter === "all" || device.type?.toLowerCase() === typeFilter.toLowerCase()
+    const matchesStatus = statusFilter === "all" || device.status?.toLowerCase() === statusFilter.toLowerCase()
     return matchesSearch && matchesType && matchesStatus
   })
 
@@ -191,43 +184,66 @@ export default function DevicesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="type">Device Type</Label>
-                  <Select>
+                  <Select value={newDevice.type} onValueChange={(v) => setNewDevice({ ...newDevice, type: v })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pc">PC</SelectItem>
-                      <SelectItem value="laptop">Laptop</SelectItem>
-                      <SelectItem value="printer">Printer</SelectItem>
-                      <SelectItem value="monitor">Monitor</SelectItem>
+                      <SelectItem value="PC">PC</SelectItem>
+                      <SelectItem value="Laptop">Laptop</SelectItem>
+                      <SelectItem value="Printer">Printer</SelectItem>
+                      <SelectItem value="Monitor">Monitor</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="brand">Brand</Label>
-                  <Input id="brand" placeholder="e.g., Dell, HP" />
+                  <Input
+                    id="brand"
+                    placeholder="e.g., Dell, HP"
+                    value={newDevice.brand}
+                    onChange={(e) => setNewDevice({ ...newDevice, brand: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
-                <Input id="model" placeholder="e.g., OptiPlex 7090" />
+                <Input
+                  id="model"
+                  placeholder="e.g., OptiPlex 7090"
+                  value={newDevice.model}
+                  onChange={(e) => setNewDevice({ ...newDevice, model: e.target.value })}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="inventory">Inventory Number</Label>
-                  <Input id="inventory" placeholder="INV-2024-XXX" />
+                  <Input
+                    id="inventory"
+                    placeholder="INV-2024-XXX"
+                    value={newDevice.inventoryNumber}
+                    onChange={(e) => setNewDevice({ ...newDevice, inventoryNumber: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="serial">Serial Number</Label>
-                  <Input id="serial" placeholder="Device serial number" />
+                  <Input
+                    id="serial"
+                    placeholder="Device serial number"
+                    value={newDevice.serialNumber}
+                    onChange={(e) => setNewDevice({ ...newDevice, serialNumber: e.target.value })}
+                  />
                 </div>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button onClick={() => setAddDialogOpen(false)}>Add Device</Button>
+              <Button onClick={handleAddDevice} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Add Device
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -263,10 +279,9 @@ export default function DevicesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="under repair">Under Repair</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="operational">Active</SelectItem>
+              <SelectItem value="in_repair">Under Repair</SelectItem>
+              <SelectItem value="decommissioned">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -277,7 +292,7 @@ export default function DevicesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Type</TableHead>
-              <TableHead>Brand / Model</TableHead>
+              <TableHead>Name</TableHead>
               <TableHead className="hidden md:table-cell">Inventory #</TableHead>
               <TableHead className="hidden lg:table-cell">Serial #</TableHead>
               <TableHead>Status</TableHead>
@@ -286,71 +301,79 @@ export default function DevicesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredDevices.map((device) => {
-              const DeviceIcon = getDeviceIcon(device.type)
-              return (
-                <TableRow key={device.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-                        <DeviceIcon className="h-4 w-4 text-muted-foreground" />
+            {filteredDevices.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  No devices found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredDevices.map((device) => {
+                const DeviceIcon = getDeviceIcon(device.type)
+                return (
+                  <TableRow key={device.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                          <DeviceIcon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <span className="hidden sm:inline">{device.type}</span>
                       </div>
-                      <span className="hidden sm:inline">{device.type}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium text-foreground">{device.brand}</p>
-                      <p className="text-sm text-muted-foreground">{device.model}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell font-mono text-sm">
-                    {device.inventoryNumber}
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell font-mono text-sm">
-                    {device.serialNumber}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(device.status)}</TableCell>
-                  <TableCell className="hidden sm:table-cell text-muted-foreground">
-                    {device.assignedUser}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <UserPlus className="mr-2 h-4 w-4" />
-                          Assign User
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium text-foreground">{device.name}</p>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell font-mono text-sm">
+                      {device.inventoryNumber}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell font-mono text-sm">
+                      {device.serialNumber}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(device.status)}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-muted-foreground">
+                      {device.assignedToName || "Unassigned"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            Assign User
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDeleteDevice(device.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>Showing {filteredDevices.length} of {devices.length} devices</p>
+        <p>Showing {filteredDevices.length} of {deviceList.length} devices</p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled>
             Previous

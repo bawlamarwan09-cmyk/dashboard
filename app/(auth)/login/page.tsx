@@ -2,16 +2,16 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Monitor, Eye, EyeOff, Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
-  const router = useRouter()
+  const { login, logout, isLoading: authLoading } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -26,16 +26,16 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // Demo: Accept any credentials for now
-    if (formData.email && formData.password) {
-      router.push("/dashboard")
-    } else {
-      setError("Please enter your email and password")
+    try {
+      await login(formData.email, formData.password)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid email or password")
       setIsLoading(false)
     }
+  }
+
+  const handleLogout = () => {
+    logout()
   }
 
   return (
@@ -70,7 +70,7 @@ export default function LoginPage() {
                   placeholder="name@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                   required
                 />
               </div>
@@ -92,7 +92,7 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                     required
                   />
                   <Button
@@ -101,7 +101,7 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
+                    disabled={isLoading || authLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -122,7 +122,7 @@ export default function LoginPage() {
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, rememberMe: checked as boolean })
                   }
-                  disabled={isLoading}
+                  disabled={isLoading || authLoading}
                 />
                 <Label htmlFor="remember" className="text-sm font-normal">
                   Remember me for 30 days
@@ -131,7 +131,7 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -146,12 +146,8 @@ export default function LoginPage() {
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => {
-                  // Clear any stored session/tokens
-                  localStorage.removeItem("token")
-                  sessionStorage.clear()
-                  router.push("/login")
-                }}
+                onClick={handleLogout}
+                disabled={isLoading || authLoading}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Logout
