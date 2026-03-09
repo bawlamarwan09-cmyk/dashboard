@@ -17,7 +17,7 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -37,28 +37,31 @@ const adminNavigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const isCollapsed = mounted ? collapsed : false
 
   return (
     <aside
       className={cn(
         "flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        isCollapsed ? "w-16" : "w-64"
       )}
     >
       <div className="flex h-16 items-center justify-between border-b border-border px-4">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Monitor className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-semibold text-sidebar-foreground">IT Manager</span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+        <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Monitor className="h-4 w-4 text-primary-foreground" />
           </div>
-        )}
+          <span className="font-semibold text-sidebar-foreground">IT Manager</span>
+        </div>
+        <div className={cn("mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary", !isCollapsed && "hidden")}>
+          <Monitor className="h-4 w-4 text-primary-foreground" />
+        </div>
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -77,7 +80,7 @@ export function Sidebar() {
                 )}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.name}</span>}
+                <span className={cn(isCollapsed && "hidden")}>{item.name}</span>
               </Link>
             )
           })}
@@ -86,11 +89,9 @@ export function Sidebar() {
         <div className="my-4 h-px bg-border" />
 
         <div className="space-y-1">
-          {!collapsed && (
-            <span className="px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Admin
-            </span>
-          )}
+          <span className={cn("px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "hidden")}>
+            Admin
+          </span>
           {adminNavigation.map((item) => {
             const isActive = pathname === item.href
             return (
@@ -105,7 +106,7 @@ export function Sidebar() {
                 )}
               >
                 <item.icon className="h-5 w-5 shrink-0" />
-                {!collapsed && <span>{item.name}</span>}
+                <span className={cn(isCollapsed && "hidden")}>{item.name}</span>
               </Link>
             )
           })}
@@ -119,11 +120,7 @@ export function Sidebar() {
           onClick={() => setCollapsed(!collapsed)}
           className="w-full justify-center"
         >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
+          <ChevronRight className={cn("h-4 w-4 transition-transform", !isCollapsed && "rotate-180")} />
         </Button>
       </div>
     </aside>
