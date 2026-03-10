@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api"
 
 interface FetchOptions extends RequestInit {
   token?: string
@@ -10,13 +10,11 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { token, ...fetchOptions } = options
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...fetchOptions.headers,
-  }
+  const headers = new Headers(fetchOptions.headers)
+  headers.set("Content-Type", "application/json")
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`
+    headers.set("Authorization", `Bearer ${token}`)
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
