@@ -4,19 +4,21 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { useRouter } from "next/navigation"
 import { authApi, User } from "./api"
 
+type BackendRole = "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
+
+interface RegisterData {
+  name: string
+  email: string
+  password: string
+  role?: BackendRole
+}
+
 interface AuthContextType {
   user: User | null
   token: string | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (data: {
-    firstName: string
-    lastName: string
-    email: string
-    password: string
-    company?: string
-    role?: string
-  }) => Promise<void>
+  register: (data: RegisterData) => Promise<void>
   logout: () => void
 }
 
@@ -30,8 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const storedToken = localStorage.getItem("token")
+
     if (storedToken) {
       setToken(storedToken)
+
       authApi
         .me(storedToken)
         .then((userData) => {
@@ -40,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .catch(() => {
           localStorage.removeItem("token")
           setToken(null)
+          setUser(null)
         })
         .finally(() => {
           setIsLoading(false)
@@ -57,14 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/dashboard")
   }
 
-  const register = async (data: {
-    firstName: string
-    lastName: string
-    email: string
-    password: string
-    company?: string
-    role?: string
-  }) => {
+  const register = async (data: RegisterData) => {
     const response = await authApi.register(data)
     localStorage.setItem("token", response.token)
     setToken(response.token)
@@ -73,9 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    if (token) {
-      authApi.logout(token).catch(() => {})
-    }
     localStorage.removeItem("token")
     setToken(null)
     setUser(null)
@@ -91,8 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
+
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
+
   return context
 }

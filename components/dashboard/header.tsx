@@ -30,10 +30,37 @@ export function Header({ onMenuClick }: HeaderProps) {
     setMounted(true)
   }, [])
 
-  const userInitials = user
-    ? `${user.firstName?.charAt(0) || ""}${user.lastName?.charAt(0) || ""}`.toUpperCase()
-    : "JD"
-  const userName = user ? `${user.firstName} ${user.lastName}` : "John Doe"
+  if (!mounted) {
+    return (
+      <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
+            <Menu className="h-5 w-5" />
+          </Button>
+
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Search devices, problems..." className="w-80 pl-9" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9" />
+          <div className="h-9 w-9 rounded-full bg-muted" />
+          <div className="h-9 w-9 rounded-full bg-muted" />
+        </div>
+      </header>
+    )
+  }
+
+  const fullName = user?.name || "John Doe"
+  const userInitials = fullName
+    .split(" ")
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+
   const userEmail = user?.email || "john.doe@company.com"
 
   return (
@@ -47,6 +74,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </Button>
+
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -57,17 +85,15 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {mounted && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -78,6 +104,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               </Badge>
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -106,20 +133,19 @@ export function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full">
               <Avatar className="h-9 w-9">
-                <AvatarImage src={user?.avatar || "/avatars/user.png"} alt={userName} />
+                <AvatarImage src={user?.avatar || "/avatars/user.png"} alt={fullName} />
                 <AvatarFallback className="bg-primary text-primary-foreground">
                   {userInitials}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{userName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {userEmail}
-                </p>
+                <p className="text-sm font-medium">{fullName}</p>
+                <p className="text-xs text-muted-foreground">{userEmail}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

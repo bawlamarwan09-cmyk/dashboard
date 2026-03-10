@@ -2,12 +2,26 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Monitor, Eye, EyeOff, Loader2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 
@@ -18,27 +32,32 @@ const passwordRequirements = [
   { id: "number", label: "One number", test: (p: string) => /\d/.test(p) },
 ]
 
+type BackendRole = "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
+
 export default function RegisterPage() {
+  const router = useRouter()
   const { register, isLoading: authLoading } = useAuth()
+
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     company: "",
-    role: "",
+    role: "USER" as BackendRole,
     password: "",
     confirmPassword: "",
   })
+
   const [error, setError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
-    // Validate password requirements
     const allRequirementsMet = passwordRequirements.every((req) => req.test(formData.password))
     if (!allRequirementsMet) {
       setError("Please meet all password requirements")
@@ -50,19 +69,26 @@ export default function RegisterPage() {
       return
     }
 
+    const fullName = `${formData.firstName} ${formData.lastName}`.trim()
+    if (!fullName) {
+      setError("Full name is required")
+      return
+    }
+
     setIsLoading(true)
 
     try {
       await register({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        name: fullName,
         email: formData.email,
         password: formData.password,
-        company: formData.company,
         role: formData.role,
       })
+
+      router.push("/login")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+    } finally {
       setIsLoading(false)
     }
   }
@@ -74,7 +100,9 @@ export default function RegisterPage() {
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
             <Monitor className="h-6 w-6 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">IT Equipment Manager</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            IT Equipment Manager
+          </h1>
           <p className="text-sm text-muted-foreground">Problem Management System</p>
         </div>
 
@@ -83,6 +111,7 @@ export default function RegisterPage() {
             <CardTitle className="text-xl">Create an account</CardTitle>
             <CardDescription>Enter your details to get started</CardDescription>
           </CardHeader>
+
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
@@ -98,18 +127,23 @@ export default function RegisterPage() {
                     id="firstName"
                     placeholder="John"
                     value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, firstName: e.target.value })
+                    }
                     disabled={isLoading || authLoading}
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last name</Label>
                   <Input
                     id="lastName"
                     placeholder="Doe"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, lastName: e.target.value })
+                    }
                     disabled={isLoading || authLoading}
                     required
                   />
@@ -130,14 +164,13 @@ export default function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="company">Company</Label>
+                <Label htmlFor="company">Company (optional)</Label>
                 <Input
                   id="company"
                   placeholder="Company name"
                   value={formData.company}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                   disabled={isLoading || authLoading}
-                  required
                 />
               </div>
 
@@ -145,17 +178,19 @@ export default function RegisterPage() {
                 <Label htmlFor="role">Role</Label>
                 <Select
                   value={formData.role}
-                  onValueChange={(value) => setFormData({ ...formData, role: value })}
+                  onValueChange={(value: BackendRole) =>
+                    setFormData({ ...formData, role: value })
+                  }
                   disabled={isLoading || authLoading}
                 >
                   <SelectTrigger id="role">
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="employee">Employee</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="it_admin">IT Administrator</SelectItem>
-                    <SelectItem value="technician">Technician</SelectItem>
+                    <SelectItem value="USER">User</SelectItem>
+                    <SelectItem value="OPERATOR">Operator</SelectItem>
+                    <SelectItem value="COMPANY">Company</SelectItem>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -190,16 +225,20 @@ export default function RegisterPage() {
                     </span>
                   </Button>
                 </div>
+
                 {formData.password && (
                   <div className="mt-2 space-y-1">
                     {passwordRequirements.map((req) => {
                       const isMet = req.test(formData.password)
+
                       return (
                         <div
                           key={req.id}
                           className={cn(
                             "flex items-center gap-2 text-xs",
-                            isMet ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                            isMet
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-muted-foreground"
                           )}
                         >
                           {isMet ? (
@@ -223,7 +262,9 @@ export default function RegisterPage() {
                     type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, confirmPassword: e.target.value })
+                    }
                     disabled={isLoading || authLoading}
                     required
                   />
@@ -245,9 +286,11 @@ export default function RegisterPage() {
                     </span>
                   </Button>
                 </div>
-                {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                  <p className="text-xs text-destructive">Passwords do not match</p>
-                )}
+
+                {formData.confirmPassword &&
+                  formData.password !== formData.confirmPassword && (
+                    <p className="text-xs text-destructive">Passwords do not match</p>
+                  )}
               </div>
             </CardContent>
 
