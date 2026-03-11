@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  OPERATOR
+  COMPANY
+  ADMIN
+}
+
+enum ProblemeStatus {
+  DECLARED
+  UNDER_VERIFICATION
+  SENT_TO_COMPANY
+  REPAIRED
+  REPLACED
+  CLOSED
+}
+
+enum InterventionResult {
+  REPAIRED
+  REPLACED
+}
+
+model User {
+  id                Int            @id @default(autoincrement())
+  name              String
+  email             String         @unique
+  password          String
+  role              Role
+  created_at        DateTime       @default(now())
+  affectations      Affectation[]
+  declaredProblemes Probleme[]     @relation("DeclaredProblems")
+  operatorIntervs   Intervention[] @relation("OperatorInterventions")
+  companyIntervs    Intervention[] @relation("CompanyInterventions")
+  sentMessages      Message[]      @relation("SentMessages")
+  receivedMessages  Message[]      @relation("ReceivedMessages")
+  historiques       Historique[]
+}
+
+model Materiel {
+  id                 Int           @id @default(autoincrement())
+  type               String
+  marque             String
+  modele             String
+  code_onee          String        @unique
+  numero_serie       String        @unique
+  numero_inventaire  String        @unique
+  date_arrive_drr    DateTime
+  affectations       Affectation[]
+  problemes          Probleme[]
+  ancienRemplacements Remplacement[] @relation("AncienMateriel")
+}
+
+model Affectation {
+  id           Int       @id @default(autoincrement())
+  materiel_id  Int
+  user_id      Int
+  entite       String
+  agence       String
+  secteur      String
+  centre       String
+  date_debut   DateTime
+  date_fin     DateTime?
+  materiel     Materiel  @relation(fields: [materiel_id], references: [id], onDelete: Restrict)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@index([materiel_id])
+  @@index([user_id])
+}
+
+model Probleme {
+  id                   Int            @id @default(autoincrement())
+  materiel_id          Int
+  declared_by_user_id  Int
+  description          String
+  status               ProblemeStatus @default(DECLARED)
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
+  materiel             Materiel       @relation(fields: [materiel_id], references: [id], onDelete: Restrict)
+  declaredBy           User           @relation("DeclaredProblems", fields: [declared_by_user_id], references: [id], onDelete: Restrict)
+  interventions        Intervention[]
+  messages             Message[]
+
+  @@index([materiel_id])
+  @@index([declared_by_user_id])
+}
+
+model Intervention {
+  id                    Int                 @id @default(autoincrement())
+  probleme_id           Int
+  operator_id           Int
+  company_id            Int?
+  repare_par_admin      Boolean             @default(false)
+  diagnostic            String?
+  date_envoi_entreprise DateTime?
+  reference_envoi       String?
+  date_retour_drr       DateTime?
+  reference_retour      String?
+  resultat              InterventionResult?
+  date_intervention     DateTime?
+  date_retour_final     DateTime?
+  probleme              Probleme            @relation(fields: [probleme_id], references: [id], onDelete: Restrict)
+  operator              User                @relation("OperatorInterventions", fields: [operator_id], references: [id], onDelete: Restrict)
+  company               User?               @relation("CompanyInterventions", fields: [company_id], references: [id], onDelete: Restrict)
+  remplacements         Remplacement[]
+
+  @@index([probleme_id])
+  @@index([operator_id])
+  @@index([company_id])
+}
+
+model Remplacement {
+  id                    Int          @id @default(autoincrement())
+  intervention_id       Int
+  ancien_materiel_id    Int
+  nouveau_marque        String
+  nouveau_modele        String
+  nouveau_code_onee     String       @unique
+  nouveau_numero_serie  String       @unique
+  intervention          Intervention @relation(fields: [intervention_id], references: [id], onDelete: Restrict)
+  ancienMateriel        Materiel     @relation("AncienMateriel", fields: [ancien_materiel_id], references: [id], onDelete: Restrict)
+
+  @@index([intervention_id])
+  @@index([ancien_materiel_id])
+}
+
+model Historique {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  action      String
+  entity_type String
+  entity_id   Int
+  details     String?
+  created_at  DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@index([user_id])
+  @@index([entity_type, entity_id])
+}
+
+model Message {
+  id          Int      @id @default(autoincrement())
+  probleme_id Int
+  sender_id   Int
+  receiver_id Int
+  message     String
+  created_at  DateTime @default(now())
+  probleme    Probleme @relation(fields: [probleme_id], references: [id], onDelete: Restrict)
+  sender      User     @relation("SentMessages", fields: [sender_id], references: [id], onDelete: Restrict)
+  receiver    User     @relation("ReceivedMessages", fields: [receiver_id], references: [id], onDelete: Restrict)
+
+  @@index([probleme_id])
+  @@index([sender_id])
+  @@index([receiver_id])
+}

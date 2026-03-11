@@ -7,147 +7,142 @@ import {
   User,
   Building2,
   Wrench,
-  MoreVertical,
-  Phone,
-  Mail,
   Clock,
+  Loader2,
+  MessageSquare,
+  ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { messagesApi, usersApi } from "@/lib/api"
+import useSWR, { mutate } from "swr"
 
-const conversations = [
-  {
-    id: 1,
-    name: "Mike Tech",
-    role: "Operator",
-    avatar: "MT",
-    lastMessage: "I'll check the GPU temperature and run diagnostics.",
-    time: "2 min ago",
-    unread: 2,
-    online: true,
-    problemId: "PRB-001",
-  },
-  {
-    id: 2,
-    name: "Canon Service Center",
-    role: "Company",
-    avatar: "CS",
-    lastMessage: "The device is ready for pickup. Invoice attached.",
-    time: "1 hour ago",
-    unread: 1,
-    online: false,
-    problemId: "PRB-003",
-  },
-  {
-    id: 3,
-    name: "Sarah Admin",
-    role: "Operator",
-    avatar: "SA",
-    lastMessage: "Your monitor replacement has been processed.",
-    time: "3 hours ago",
-    unread: 0,
-    online: true,
-    problemId: "PRB-004",
-  },
-  {
-    id: 4,
-    name: "HP Support",
-    role: "Company",
-    avatar: "HP",
-    lastMessage: "We received the laptop. Estimated repair time: 5-7 days.",
-    time: "Yesterday",
-    unread: 0,
-    online: false,
-    problemId: "PRB-002",
-  },
-  {
-    id: 5,
-    name: "IT Support Team",
-    role: "Operator",
-    avatar: "IT",
-    lastMessage: "Welcome! How can we help you today?",
-    time: "2 days ago",
-    unread: 0,
-    online: true,
-    problemId: null,
-  },
-]
+type Message = {
+  id: number
+  probleme_id: number
+  sender_id: number
+  receiver_id: number
+  message: string
+  created_at: string
+  sender?: { id: number; name: string; role: string }
+  receiver?: { id: number; name: string; role: string }
+  probleme?: {
+    id: number
+    description: string
+    status: string
+    materiel?: { id: number; marque: string; modele: string }
+  }
+}
 
-const messages = [
-  {
-    id: 1,
-    senderId: "user",
-    content: "Hi, I reported a problem with my PC - the screen keeps flickering.",
-    timestamp: "10:30 AM",
-  },
-  {
-    id: 2,
-    senderId: "operator",
-    content: "Hello John! I've received your ticket PRB-001. I'll look into it right away. Can you tell me when the flickering started?",
-    timestamp: "10:32 AM",
-  },
-  {
-    id: 3,
-    senderId: "user",
-    content: "It started about a week ago. It seems to happen more when I'm running heavy applications.",
-    timestamp: "10:35 AM",
-  },
-  {
-    id: 4,
-    senderId: "operator",
-    content: "Thanks for the info. That could indicate a GPU issue or possibly a loose cable. I'll schedule a time to check it. Are you available this afternoon?",
-    timestamp: "10:38 AM",
-  },
-  {
-    id: 5,
-    senderId: "user",
-    content: "Yes, I'll be at my desk all afternoon. Thanks for the quick response!",
-    timestamp: "10:40 AM",
-  },
-  {
-    id: 6,
-    senderId: "operator",
-    content: "I'll check the GPU temperature and run diagnostics. See you at 2 PM.",
-    timestamp: "10:42 AM",
-  },
-]
+const getRoleIcon = (role?: string) => {
+  switch (role?.toLowerCase()) {
+    case "operator": return <Wrench className="h-3 w-3" />
+    case "company":  return <Building2 className="h-3 w-3" />
+    case "admin":    return <ShieldCheck className="h-3 w-3" />
+    default:         return <User className="h-3 w-3" />
+  }
+}
 
-export default function MessagesPage() {
-  const [selectedConversation, setSelectedConversation] = useState(conversations[0])
-  const [newMessage, setNewMessage] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
+const getInitials = (name?: string) =>
+  (name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
 
-  const filteredConversations = conversations.filter((conv) =>
-    conv.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+const groupByProbleme = (messages: Message[], currentUserId: number) => {
+  const map = new Map<number, { problemeId: number; other: Message["sender"]; messages: Message[]; lastMessage: Message }>()
 
-  const getRoleIcon = (role: string) => {
-    switch (role.toLowerCase()) {
-      case "operator":
-        return <Wrench className="h-3 w-3" />
-      case "company":
-        return <Building2 className="h-3 w-3" />
-      default:
-        return <User className="h-3 w-3" />
+  for (const msg of messages) {
+    const other = msg.sender_id === currentUserId ? msg.receiver : msg.sender
+    const existing = map.get(msg.probleme_id)
+    if (!existing) {
+      map.set(msg.probleme_id, { problemeId: msg.probleme_id, other, messages: [msg], lastMessage: msg })
+    } else {
+      existing.messages.push(msg)
+      if (new Date(msg.created_at) > new Date(existing.lastMessage.created_at)) {
+        existing.lastMessage = msg
+      }
     }
   }
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      // Would send message to API
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()
+  )
+}
+
+export default function MessagesPage() {
+  const { token, user } = useAuth()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedProblemeId, setSelectedProblemeId] = useState<number | null>(null)
+  const [newMessage, setNewMessage] = useState("")
+  const [isSending, setIsSending] = useState(false)
+
+  // Fetch inbox + sent combined
+  const { data: inbox, isLoading: loadingInbox } = useSWR(
+    token ? ["messages-inbox", token] : null,
+    () => fetch(`http://localhost:5000/api/v1/messages/inbox`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => r.json()).then(d => d.data as Message[])
+  )
+
+  const { data: sent } = useSWR(
+    token ? ["messages-sent", token] : null,
+    () => fetch(`http://localhost:5000/api/v1/messages/sent`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => r.json()).then(d => d.data as Message[])
+  )
+
+  // Fetch messages for selected probleme
+  const { data: threadMessages, isLoading: loadingThread } = useSWR(
+    token && selectedProblemeId ? ["messages-thread", selectedProblemeId, token] : null,
+    () => fetch(`http://localhost:5000/api/v1/messages/probleme/${selectedProblemeId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(r => r.json()).then(d => d.data as Message[])
+  )
+
+  const allMessages = [...(inbox || []), ...(sent || [])]
+  const uniqueMessages = Array.from(new Map(allMessages.map(m => [m.id, m])).values())
+  const conversations = user ? groupByProbleme(uniqueMessages, user.id) : []
+
+  const filteredConversations = conversations.filter((c) =>
+    c.other?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(c.problemeId).includes(searchQuery)
+  )
+
+  const selectedConv = conversations.find(c => c.problemeId === selectedProblemeId)
+
+  const handleSend = async () => {
+    if (!token || !newMessage.trim() || !selectedConv || !user) return
+    setIsSending(true)
+    try {
+      await fetch(`http://localhost:5000/api/v1/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          probleme_id: selectedConv.problemeId,
+          receiver_id: selectedConv.other?.id,
+          message: newMessage.trim(),
+        }),
+      })
       setNewMessage("")
+      mutate(["messages-thread", selectedProblemeId, token])
+      mutate(["messages-sent", token])
+    } catch (err) {
+      console.error("Send failed:", err)
+    } finally {
+      setIsSending(false)
     }
+  }
+
+  if (loadingInbox) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
@@ -166,175 +161,146 @@ export default function MessagesPage() {
             />
           </div>
         </div>
+
         <ScrollArea className="flex-1">
-          <div className="divide-y divide-border">
-            {filteredConversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                onClick={() => setSelectedConversation(conversation)}
-                className={cn(
-                  "flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-muted/50",
-                  selectedConversation.id === conversation.id && "bg-muted"
-                )}
-              >
-                <div className="relative">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={`/avatars/${conversation.avatar.toLowerCase()}.png`} />
+          {filteredConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+              <MessageSquare className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No conversations yet</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {filteredConversations.map((conv) => (
+                <button
+                  key={conv.problemeId}
+                  onClick={() => setSelectedProblemeId(conv.problemeId)}
+                  className={cn(
+                    "flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-muted/50",
+                    selectedProblemeId === conv.problemeId && "bg-muted"
+                  )}
+                >
+                  <Avatar className="h-10 w-10 shrink-0">
                     <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                      {conversation.avatar}
+                      {getInitials(conv.other?.name)}
                     </AvatarFallback>
                   </Avatar>
-                  {conversation.online && (
-                    <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-success" />
-                  )}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-foreground">{conversation.name}</span>
-                    <span className="text-xs text-muted-foreground">{conversation.time}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Badge variant="outline" className="h-5 px-1 text-xs">
-                      {getRoleIcon(conversation.role)}
-                    </Badge>
-                    {conversation.problemId && (
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {conversation.problemId}
+                  <div className="flex-1 overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">{conv.other?.name ?? "Unknown"}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(conv.lastMessage.created_at).toLocaleDateString()}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Badge variant="outline" className="h-5 px-1 text-xs">
+                        {getRoleIcon(conv.other?.role)}
+                        <span className="ml-1">{conv.other?.role}</span>
+                      </Badge>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        #{conv.problemeId}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">
+                      {conv.lastMessage.message}
+                    </p>
                   </div>
-                  <p className="mt-1 truncate text-sm text-muted-foreground">
-                    {conversation.lastMessage}
-                  </p>
-                </div>
-                {conversation.unread > 0 && (
-                  <Badge className="h-5 w-5 rounded-full p-0 text-xs">
-                    {conversation.unread}
-                  </Badge>
-                )}
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          )}
         </ScrollArea>
       </div>
 
       {/* Chat Area */}
       <div className="flex flex-1 flex-col rounded-xl border border-border bg-card shadow-sm">
-        {/* Chat Header */}
-        <div className="flex items-center justify-between border-b border-border p-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
+        {!selectedProblemeId ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+            <MessageSquare className="h-12 w-12 text-muted-foreground" />
+            <p className="text-lg font-medium text-foreground">Select a conversation</p>
+            <p className="text-sm text-muted-foreground">Choose a conversation from the left to start messaging</p>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-border p-4">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={`/avatars/${selectedConversation.avatar.toLowerCase()}.png`} />
                 <AvatarFallback className="bg-primary/10 text-primary">
-                  {selectedConversation.avatar}
+                  {getInitials(selectedConv?.other?.name)}
                 </AvatarFallback>
               </Avatar>
-              {selectedConversation.online && (
-                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-card bg-success" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-foreground">{selectedConversation.name}</h3>
-                <Badge variant="outline" className="text-xs">
-                  {selectedConversation.role}
-                </Badge>
-              </div>
-              {selectedConversation.problemId && (
-                <p className="text-sm text-muted-foreground">
-                  Re: {selectedConversation.problemId}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon">
-              <Phone className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Mail className="h-5 w-5" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem>View Profile</DropdownMenuItem>
-                <DropdownMenuItem>View Problem</DropdownMenuItem>
-                <DropdownMenuItem>Clear Chat</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
-            <div className="flex justify-center">
-              <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                Today
-              </span>
-            </div>
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex",
-                  message.senderId === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                <div
-                  className={cn(
-                    "max-w-[70%] rounded-2xl px-4 py-2",
-                    message.senderId === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
-                  )}
-                >
-                  <p className="text-sm">{message.content}</p>
-                  <p
-                    className={cn(
-                      "mt-1 flex items-center gap-1 text-xs",
-                      message.senderId === "user"
-                        ? "text-primary-foreground/70"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    <Clock className="h-3 w-3" />
-                    {message.timestamp}
-                  </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground">{selectedConv?.other?.name}</h3>
+                  <Badge variant="outline" className="text-xs">{selectedConv?.other?.role}</Badge>
                 </div>
+                <p className="text-sm text-muted-foreground">Problem #{selectedProblemeId}</p>
               </div>
-            ))}
-          </div>
-        </ScrollArea>
+            </div>
 
-        {/* Message Input */}
-        <div className="border-t border-border p-4">
-          <div className="flex gap-2">
-            <Textarea
-              placeholder="Type your message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="min-h-[60px] resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSendMessage()
-                }
-              }}
-            />
-            <Button onClick={handleSendMessage} className="h-auto">
-              <Send className="h-5 w-5" />
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Press Enter to send, Shift+Enter for new line
-          </p>
-        </div>
+            {/* Messages */}
+            <ScrollArea className="flex-1 p-4">
+              {loadingThread ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(threadMessages || []).length === 0 ? (
+                    <p className="text-center text-sm text-muted-foreground py-8">No messages yet</p>
+                  ) : (
+                    (threadMessages || []).map((msg) => {
+                      const isMe = msg.sender_id === user?.id
+                      return (
+                        <div key={msg.id} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+                          <div className={cn(
+                            "max-w-[70%] rounded-2xl px-4 py-2",
+                            isMe ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                          )}>
+                            {!isMe && (
+                              <p className="mb-1 text-xs font-medium opacity-70">{msg.sender?.name}</p>
+                            )}
+                            <p className="text-sm">{msg.message}</p>
+                            <p className={cn(
+                              "mt-1 flex items-center gap-1 text-xs",
+                              isMe ? "text-primary-foreground/70" : "text-muted-foreground"
+                            )}>
+                              <Clock className="h-3 w-3" />
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+
+            {/* Input */}
+            <div className="border-t border-border p-4">
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Type your message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="min-h-[60px] resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSend()
+                    }
+                  }}
+                />
+                <Button onClick={handleSend} disabled={!newMessage.trim() || isSending} className="h-auto">
+                  {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Press Enter to send, Shift+Enter for new line
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

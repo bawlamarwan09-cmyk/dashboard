@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { useProbleme } from "@/lib/hooks/use-api"
+import { useProbleme, useUsers } from "@/lib/hooks/use-api"
 import { problemesApi, messagesApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { mutate } from "swr"
@@ -84,7 +84,10 @@ export default function ProblemeDetailPage() {
   const [newStatus, setNewStatus] = useState<ProblemeStatus | "">("")
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [diagnostic, setDiagnostic] = useState("")
-
+const [operatorId, setOperatorId] = useState("")
+const [companyId, setCompanyId] = useState("")
+const [statusError, setStatusError] = useState<string | null>(null)
+const { data: users } = useUsers()
   // Set mounted flag on client side
   useEffect(() => {
     setIsMounted(true)
@@ -128,19 +131,53 @@ export default function ProblemeDetailPage() {
   }
 
   const handleUpdateStatus = async () => {
-    if (!token || !probleme || !newStatus) return
-    setIsUpdatingStatus(true)
-    try {
-      await problemesApi.updateStatus(probleme.id, newStatus as ProblemeStatus, token)
-      mutate(["probleme", probleme.id, token])
-      mutate(["problemes", token])
-      setNewStatus("")
-    } catch (err) {
-      console.error("Failed to update status:", err)
-    } finally {
-      setIsUpdatingStatus(false)
-    }
+  if (!token || !probleme || !newStatus) return
+  setStatusError(null)
+
+  if (newStatus === "UNDER_VERIFICATION" && !operatorId) {
+    setStatusError("Please select an operator.")
+    return
   }
+  if (newStatus === "SENT_TO_COMPANY" && !companyId) {
+    setStatusError("Please select a company.")
+    return
+  }
+
+  setIsUpdatingStatus(true)
+  try {
+    const res = await fetch(
+      `http://localhost:5000/api/v1/problemes/${probleme.id}/status`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          ...(operatorId && { operator_id: parseInt(operatorId) }),
+          ...(companyId && { company_id: parseInt(companyId) }),
+          ...(diagnostic && { diagnostic }),
+        }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message)
+
+    mutate(["probleme", probleme.id, token])
+    mutate(["problemes", token])
+    mutate(["interventions", token])
+    setNewStatus("")
+    setOperatorId("")
+    setCompanyId("")
+    setDiagnostic("")
+  } catch (err: any) {
+    setStatusError(err.message || "Failed to update status")
+  } finally {
+    setIsUpdatingStatus(false)
+  }
+  
+}
 
   if (isLoading) {
     return (
@@ -360,40 +397,101 @@ export default function ProblemeDetailPage() {
           </div>
 
           {/* Operator Actions */}
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="flex items-center gap-2 font-semibold text-card-foreground">
-              <Wrench className="h-5 w-5" />
-              Update Status
-            </h3>
-            <div className="mt-4 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">New Status</label>
-                <Select value={newStatus} onValueChange={(v) => setNewStatus(v as ProblemeStatus)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DECLARED">Declared</SelectItem>
-                    <SelectItem value="UNDER_VERIFICATION">Under Verification</SelectItem>
-                    <SelectItem value="SENT_TO_COMPANY">Sent to Company</SelectItem>
-                    <SelectItem value="REPAIRED">Repaired</SelectItem>
-                    <SelectItem value="REPLACED">Replaced</SelectItem>
-                    <SelectItem value="CLOSED">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                className="w-full"
-                onClick={handleUpdateStatus}
-                disabled={!newStatus || isUpdatingStatus}
-              >
-                {isUpdatingStatus
-                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                Update Status
-              </Button>
-            </div>
-          </div>
+       {/* Operator Actions */}
+<div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+  <h3 className="flex items-center gap-2 font-semibold text-card-foreground">
+    <Wrench className="h-5 w-5" />
+    Update Status
+  </h3>
+  <div className="mt-4 space-y-4">
+
+    {statusError && (
+      <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        {statusError}
+      </div>
+    )}
+
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-foreground">New Status</label>
+      <Select value={newStatus} onValueChange={(v) => {
+        setNewStatus(v as ProblemeStatus)
+        setStatusError(null)
+        setOperatorId("")
+        setCompanyId("")
+      }}>
+        <SelectTrigger>
+          <SelectValue placeholder="Select status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="UNDER_VERIFICATION">Under Verification</SelectItem>
+          <SelectItem value="SENT_TO_COMPANY">Sent to Company</SelectItem>
+          <SelectItem value="REPAIRED">Repaired</SelectItem>
+          <SelectItem value="REPLACED">Replaced</SelectItem>
+          <SelectItem value="CLOSED">Closed</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {newStatus === "UNDER_VERIFICATION" && (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground">
+          Assign Operator <span className="text-destructive">*</span>
+        </label>
+        <Select value={operatorId} onValueChange={setOperatorId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select operator" />
+          </SelectTrigger>
+          <SelectContent>
+            {(users || []).filter(u => u.role === "OPERATOR").map((o) => (
+              <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )}
+
+    {newStatus === "SENT_TO_COMPANY" && (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground">
+          Assign Company <span className="text-destructive">*</span>
+        </label>
+        <Select value={companyId} onValueChange={setCompanyId}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select company" />
+          </SelectTrigger>
+          <SelectContent>
+            {(users || []).filter(u => u.role === "COMPANY").map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )}
+
+    {newStatus && newStatus !== "CLOSED" && (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-foreground">Diagnostic / Notes</label>
+        <Textarea
+          placeholder="Enter diagnostic notes..."
+          value={diagnostic}
+          onChange={(e) => setDiagnostic(e.target.value)}
+          className="min-h-[80px]"
+        />
+      </div>
+    )}
+
+    <Button
+      className="w-full"
+      onClick={handleUpdateStatus}
+      disabled={!newStatus || isUpdatingStatus}
+    >
+      {isUpdatingStatus
+        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        : <CheckCircle2 className="mr-2 h-4 w-4" />}
+      Update Status
+    </Button>
+  </div>
+</div>
 
         </div>
       </div>
