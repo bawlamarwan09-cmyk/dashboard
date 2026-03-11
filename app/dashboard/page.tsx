@@ -40,16 +40,16 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard
-          title="Total Devices"
-          value={stats?.totalDevices ?? 0}
+          title="Total Materiels"
+          value={stats?.totalMateriels ?? 0}
           change="+12 this month"
           changeType="positive"
           icon={Monitor}
           iconColor="bg-primary/10 text-primary"
         />
         <StatsCard
-          title="Active Problems"
-          value={stats?.activeProblems ?? 0}
+          title="Active Problemes"
+          value={stats?.activeProblemes ?? 0}
           change="+3 today"
           changeType="negative"
           icon={AlertCircle}
@@ -65,7 +65,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Sent to Companies"
-          value={8}
+          value={stats?.resolvedThisMonth ?? 0}
           change="2 returning soon"
           changeType="neutral"
           icon={Truck}
@@ -93,26 +93,26 @@ export default function DashboardPage() {
           <h3 className="mb-4 font-semibold text-card-foreground">Quick Actions</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <a
-              href="/dashboard/problems/new"
+              href="/dashboard/problems"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-medium text-card-foreground">Report Problem</p>
+                <p className="font-medium text-card-foreground">Report Probleme</p>
                 <p className="text-sm text-muted-foreground">Submit a new issue</p>
               </div>
             </a>
             <a
-              href="/dashboard/devices/new"
+              href="/dashboard/devices"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Monitor className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-medium text-card-foreground">Add Device</p>
+                <p className="font-medium text-card-foreground">Add Materiel</p>
                 <p className="text-sm text-muted-foreground">Register new equipment</p>
               </div>
             </a>

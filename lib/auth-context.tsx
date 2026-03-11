@@ -2,16 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { authApi, User } from "./api"
-
-type BackendRole = "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
-
-interface RegisterData {
-  name: string
-  email: string
-  password: string
-  role?: BackendRole
-}
+import { authApi, User, RegisterData } from "./api"
 
 interface AuthContextType {
   user: User | null
@@ -30,33 +21,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token")
+useEffect(() => {
+  const storedToken = localStorage.getItem("token")
+  console.log("stored token on mount:", storedToken)
 
-    if (storedToken) {
-      setToken(storedToken)
+  if (!storedToken) {
+    setIsLoading(false)
+    return
+  }
 
-      authApi
-        .me(storedToken)
-        .then((userData) => {
-          setUser(userData)
-        })
-        .catch(() => {
-          localStorage.removeItem("token")
-          setToken(null)
-          setUser(null)
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    } else {
+  setToken(storedToken)
+
+  authApi
+    .me(storedToken)
+    .then((userData) => {
+      console.log("me response:", userData)
+      setUser(userData)
+    })
+    .catch((err) => {
+      console.error("me failed:", err)  // ← THIS will tell us the real error
+      localStorage.removeItem("token")
+      setToken(null)
+      setUser(null)
+    })
+    .finally(() => {
       setIsLoading(false)
-    }
-  }, [])
+    })
+}, [])
 
   const login = async (email: string, password: string) => {
     const response = await authApi.login(email, password)
     localStorage.setItem("token", response.token)
+    console.log("login response:", response)
+  console.log("token:", response.token)     // add this
     setToken(response.token)
     setUser(response.user)
     router.push("/dashboard")
@@ -87,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
 
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
 

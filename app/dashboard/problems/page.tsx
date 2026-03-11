@@ -4,15 +4,16 @@ import { useState } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
+  Plus,
   Search,
   Filter,
+  MoreHorizontal,
+  Eye,
   Clock,
-  CheckCircle2,
+  Loader2,
   Truck,
   Wrench,
-  Calendar,
-  ChevronRight,
-  Loader2,
+  CheckCircle2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,66 +27,87 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { cn } from "@/lib/utils"
-import { useProblems } from "@/lib/hooks/use-api"
+import { useProblemes } from "@/lib/hooks/use-api"
+import type { ProblemeStatus } from "@/lib/api"
 
-const getStatusInfo = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case "open":
-      return {
-        icon: AlertCircle,
-        color: "text-destructive",
-        bgColor: "bg-destructive/10",
-      }
-    case "in_progress":
-    case "in progress":
-      return {
-        icon: Wrench,
-        color: "text-warning",
-        bgColor: "bg-warning/10",
-      }
-    case "shipped":
-      return {
-        icon: Truck,
-        color: "text-primary",
-        bgColor: "bg-primary/10",
-      }
-    case "resolved":
-    case "closed":
-      return {
-        icon: CheckCircle2,
-        color: "text-success",
-        bgColor: "bg-success/10",
-      }
+const formatStatus = (status: ProblemeStatus) => {
+  switch (status) {
+    case "DECLARED":
+      return "Declared"
+    case "UNDER_VERIFICATION":
+      return "Under Verification"
+    case "SENT_TO_COMPANY":
+      return "Sent to Company"
+    case "REPAIRED":
+      return "Repaired"
+    case "REPLACED":
+      return "Replaced"
+    case "CLOSED":
+      return "Closed"
     default:
-      return {
-        icon: Clock,
-        color: "text-muted-foreground",
-        bgColor: "bg-muted",
-      }
+      return status
   }
 }
 
-const formatStatus = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case "in_progress":
-      return "In Progress"
+const getStatusBadge = (status: ProblemeStatus) => {
+  switch (status) {
+    case "DECLARED":
+      return (
+        <Badge className="bg-destructive/10 text-destructive">
+          <AlertCircle className="mr-1 h-3 w-3" />
+          {formatStatus(status)}
+        </Badge>
+      )
+    case "UNDER_VERIFICATION":
+      return (
+        <Badge className="bg-warning/10 text-warning">
+          <Clock className="mr-1 h-3 w-3" />
+          {formatStatus(status)}
+        </Badge>
+      )
+    case "SENT_TO_COMPANY":
+      return (
+        <Badge className="bg-primary/10 text-primary">
+          <Truck className="mr-1 h-3 w-3" />
+          {formatStatus(status)}
+        </Badge>
+      )
+    case "REPAIRED":
+    case "REPLACED":
+      return (
+        <Badge className="bg-success/10 text-success">
+          <Wrench className="mr-1 h-3 w-3" />
+          {formatStatus(status)}
+        </Badge>
+      )
+    case "CLOSED":
+      return (
+        <Badge className="bg-success/10 text-success">
+          <CheckCircle2 className="mr-1 h-3 w-3" />
+          {formatStatus(status)}
+        </Badge>
+      )
     default:
-      return status?.charAt(0).toUpperCase() + status?.slice(1)
+      return <Badge variant="secondary">{status}</Badge>
   }
 }
 
 export default function ProblemsPage() {
-  const { data: problems, isLoading, error } = useProblems()
+  const { data: problemes, isLoading, error } = useProblemes()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [priorityFilter, setPriorityFilter] = useState("all")
 
   if (isLoading) {
     return (
@@ -103,159 +125,125 @@ export default function ProblemsPage() {
     )
   }
 
-  const problemList = problems || []
-
-  const filteredProblems = problemList.filter((problem) => {
+  const filtered = (problemes || []).filter((p) => {
     const matchesSearch =
-      problem.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.deviceName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.reportedByName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.id?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus =
-      statusFilter === "all" || problem.status?.toLowerCase() === statusFilter.toLowerCase()
-    const matchesPriority =
-      priorityFilter === "all" || problem.priority?.toLowerCase() === priorityFilter.toLowerCase()
-    return matchesSearch && matchesStatus && matchesPriority
+      p.id.toString().includes(searchQuery) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === "all" || p.status === statusFilter
+    return matchesSearch && matchesStatus
   })
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Problems</h1>
-          <p className="text-muted-foreground">Track and manage all reported issues</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Problems
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Manage and track IT equipment problems
+          </p>
         </div>
         <Link href="/dashboard/problems/new">
           <Button>
-            <AlertCircle className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" />
             Report Problem
           </Button>
         </Link>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search problems..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-2">
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by ID or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Status" />
+            <SelectTrigger className="w-full md:w-44">
+              <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priority</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="DECLARED">Declared</SelectItem>
+              <SelectItem value="UNDER_VERIFICATION">Under Verification</SelectItem>
+              <SelectItem value="SENT_TO_COMPANY">Sent to Company</SelectItem>
+              <SelectItem value="REPAIRED">Repaired</SelectItem>
+              <SelectItem value="REPLACED">Replaced</SelectItem>
+              <SelectItem value="CLOSED">Closed</SelectItem>
             </SelectContent>
           </Select>
         </div>
-      </div>
 
-      <div className="rounded-xl border border-border bg-card shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Problem ID</TableHead>
-              <TableHead>Title / Device</TableHead>
-              <TableHead className="hidden md:table-cell">Reported By</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden lg:table-cell">Date</TableHead>
-              <TableHead className="hidden sm:table-cell">Assigned To</TableHead>
-              <TableHead className="text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredProblems.length === 0 ? (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No problems found
-                </TableCell>
+                <TableHead>ID</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Reported By</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ) : (
-              filteredProblems.map((problem) => {
-                const statusInfo = getStatusInfo(problem.status)
-                const StatusIcon = statusInfo.icon
-                return (
-                  <TableRow key={problem.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell className="font-mono text-sm font-medium">{problem.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{problem.title}</p>
-                        <p className="text-sm text-muted-foreground">{problem.deviceName}</p>
-                      </div>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <p className="text-muted-foreground">No problems found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((problem) => (
+                  <TableRow key={problem.id}>
+                    <TableCell className="font-mono text-sm">
+                      #{problem.id}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {problem.reportedByName}
+                    <TableCell className="max-w-xs truncate">
+                      {problem.description}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={cn(
-                          "flex w-fit items-center gap-1",
-                          statusInfo.bgColor,
-                          statusInfo.color,
-                          `hover:${statusInfo.bgColor}`
-                        )}
-                      >
-                        <StatusIcon className="h-3 w-3" />
-                        {formatStatus(problem.status)}
-                      </Badge>
+                    <TableCell>{getStatusBadge(problem.status)}</TableCell>
+                    <TableCell className="text-sm">
+                      {problem.declaredBy?.name ?? `User #${problem.declared_by_user_id}`}
                     </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        {new Date(problem.createdAt).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
-                      {problem.assignedToName || "Unassigned"}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(problem.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/dashboard/problems/${problem.id}`}>
-                        <Button variant="ghost" size="sm">
-                          View
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                      </Link>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`/dashboard/problems/${problem.id}`}
+                              className="cursor-pointer"
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                )
-              })
-            )}
-          </TableBody>
-        </Table>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>Showing {filteredProblems.length} of {problemList.length} problems</p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm">
-            Next
-          </Button>
-        </div>
+      <div className="text-sm text-muted-foreground">
+        Showing {filtered.length} of {problemes?.length || 0} problems
       </div>
     </div>
   )

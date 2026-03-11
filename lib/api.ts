@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"
 
 interface FetchOptions extends RequestInit {
   token?: string
@@ -18,11 +18,8 @@ export async function apiFetch<T>(
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
-    ...fetchOptions.headers,
-  }
-
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`)
+    ...(fetchOptions.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -43,146 +40,133 @@ export async function apiFetch<T>(
   return result as T
 }
 
-// Types
+// ─── Enums (mirror Prisma enums) ─────────────────────────────────────────────
+
+export type Role = "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
+
+export type ProblemeStatus =
+  | "DECLARED"
+  | "UNDER_VERIFICATION"
+  | "SENT_TO_COMPANY"
+  | "REPAIRED"
+  | "REPLACED"
+  | "CLOSED"
+
+export type InterventionResult = "REPAIRED" | "REPLACED"
+
+// ─── Models (mirror Prisma models) ───────────────────────────────────────────
+
 export interface User {
-  id: string | number
+  id: number
   name: string
   email: string
-  role: "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
-  avatar?: string
-  created_at?: string
+  role: Role
+  created_at: string
 }
+
+export interface Materiel {
+  id: number
+  type: string
+  marque: string
+  modele: string
+  code_onee: string
+  numero_serie: string
+  numero_inventaire: string
+  date_arrive_drr: string
+}
+
+export interface Affectation {
+  id: number
+  materiel_id: number
+  user_id: number
+  entite: string
+  agence: string
+  secteur: string
+  centre: string
+  date_debut: string
+  date_fin?: string | null
+  materiel?: Materiel
+  user?: User
+}
+
+export interface Probleme {
+  id: number
+  materiel_id: number
+  declared_by_user_id: number
+  description: string
+  status: ProblemeStatus
+  created_at: string
+  updated_at: string
+  materiel?: Materiel
+  declaredBy?: User
+  interventions?: Intervention[]
+  messages?: Message[]
+}
+
+export interface Intervention {
+  id: number
+  probleme_id: number
+  operator_id: number
+  company_id?: number | null
+  repare_par_admin: boolean
+  diagnostic?: string | null
+  date_envoi_entreprise?: string | null
+  reference_envoi?: string | null
+  date_retour_drr?: string | null
+  reference_retour?: string | null
+  resultat?: InterventionResult | null
+  date_intervention?: string | null
+  date_retour_final?: string | null
+  probleme?: Probleme
+  operator?: User
+  company?: User | null
+  remplacements?: Remplacement[]
+}
+
+export interface Remplacement {
+  id: number
+  intervention_id: number
+  ancien_materiel_id: number
+  nouveau_marque: string
+  nouveau_modele: string
+  nouveau_code_onee: string
+  nouveau_numero_serie: string
+  intervention?: Intervention
+  ancienMateriel?: Materiel
+}
+
+export interface Message {
+  id: number
+  probleme_id: number
+  sender_id: number
+  receiver_id: number
+  message: string
+  created_at: string
+  sender?: User
+  receiver?: User
+  probleme?: Probleme
+}
+
+export interface Historique {
+  id: number
+  user_id: number
+  action: string
+  entity_type: string
+  entity_id: number
+  details?: string | null
+  created_at: string
+  user?: User
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface RegisterData {
   name: string
   email: string
   password: string
-  role?: "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
+  role?: Role
 }
 
-export interface Device {
-  id: string
-  name: string
-  type: "PC" | "Laptop" | "Monitor" | "Printer" | "Phone" | "Tablet" | "Other"
-  inventoryNumber: string
-  serialNumber: string
-  status: "operational" | "in_repair" | "decommissioned"
-  assignedTo?: string
-  assignedToName?: string
-  location?: string
-  purchaseDate?: string
-  warrantyEnd?: string
-  createdAt: string
-}
-
-export interface Message {
-  id: string
-  content: string
-  senderId: string
-  senderName: string
-  senderAvatar?: string
-  createdAt: string
-  isRead: boolean
-}
-
-export interface Problem {
-  id: string
-  title: string
-  description: string
-  deviceId: string
-  deviceName?: string
-  status: "open" | "in_progress" | "resolved" | "closed"
-  priority: "low" | "medium" | "high" | "critical"
-  reportedBy: string
-  reportedByName?: string
-  assignedTo?: string
-  assignedToName?: string
-  createdAt: string
-  updatedAt: string
-  messages?: Message[]
-}
-
-export interface Intervention {
-  id: string
-  type: "internal" | "external" | "replacement"
-  problemId: string
-  deviceId: string
-  deviceName?: string
-  description: string
-  status: "pending" | "in_progress" | "completed"
-  technician?: string
-  technicianName?: string
-  company?: string
-  startDate: string
-  endDate?: string
-  cost?: number
-  notes?: string
-}
-
-export interface Conversation {
-  id: string
-  participants: User[]
-  lastMessage?: Message
-  unreadCount: number
-  updatedAt: string
-}
-
-export interface Company {
-  id: string
-  name: string
-  type: "repair" | "supplier" | "partner"
-  email: string
-  phone: string
-  address?: string
-  contactPerson?: string
-  status: "active" | "inactive"
-  createdAt: string
-}
-
-export interface DashboardStats {
-  totalDevices: number
-  activeProblems: number
-  pendingInterventions: number
-  resolvedThisMonth: number
-  devicesByStatus: { status: string; count: number }[]
-  problemsByPriority: { priority: string; count: number }[]
-}
-
-export interface Activity {
-  id: string
-  type: "problem_created" | "problem_resolved" | "device_added" | "intervention_completed"
-  description: string
-  user: string
-  createdAt: string
-}
-
-export interface ChartData {
-  problemsByMonth: { month: string; count: number }[]
-  devicesByType: { type: string; count: number }[]
-  interventionsByType: { type: string; count: number }[]
-}
-
-export interface Settings {
-  profile: {
-    firstName: string
-    lastName: string
-    email: string
-    phone?: string
-    avatar?: string
-  }
-  notifications: {
-    email: boolean
-    push: boolean
-    problemUpdates: boolean
-    interventionUpdates: boolean
-  }
-  appearance: {
-    theme: "light" | "dark" | "system"
-    language: string
-  }
-}
-
-// Auth API
 export const authApi = {
   login: (email: string, password: string) =>
     apiFetch<{ token: string; user: User }>("/auth/login", {
@@ -197,96 +181,171 @@ export const authApi = {
     }),
 
   me: (token: string) =>
-    apiFetch<User>("/auth/me", {
-      method: "GET",
-      token,
-    }),
+    apiFetch<User>("/auth/me", { token }),
 
   logout: async (): Promise<boolean> => true,
 }
 
-// Devices API
-export const devicesApi = {
-  getAll: (token: string) => apiFetch<Device[]>("/devices", { token }),
+// ─── Users ────────────────────────────────────────────────────────────────────
 
-  getById: (id: string, token: string) =>
-    apiFetch<Device>(`/devices/${id}`, { token }),
+export const usersApi = {
+  getAll: (token: string) =>
+    apiFetch<User[]>("/users", { token }),
 
-  create: (data: Partial<Device>, token: string) =>
-    apiFetch<Device>("/devices", {
+  getById: (id: number, token: string) =>
+    apiFetch<User>(`/users/${id}`, { token }),
+
+  create: (data: Omit<User, "id" | "created_at"> & { password: string }, token: string) =>
+    apiFetch<User>("/users", {
       method: "POST",
       body: JSON.stringify(data),
       token,
     }),
 
-  update: (id: string, data: Partial<Device>, token: string) =>
-    apiFetch<Device>(`/devices/${id}`, {
+  update: (id: number, data: Partial<Omit<User, "id" | "created_at">>, token: string) =>
+    apiFetch<User>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
       token,
     }),
 
-  delete: (id: string, token: string) =>
-    apiFetch<void>(`/devices/${id}`, {
-      method: "DELETE",
-      token,
-    }),
-
-  getMyDevices: (token: string) =>
-    apiFetch<Device[]>("/devices/my", { token }),
+  delete: (id: number, token: string) =>
+    apiFetch<void>(`/users/${id}`, { method: "DELETE", token }),
 }
 
-// Problems API
-export const problemsApi = {
-  getAll: (token: string) => apiFetch<Problem[]>("/problems", { token }),
+// ─── Materiels ────────────────────────────────────────────────────────────────
 
-  getById: (id: string, token: string) =>
-    apiFetch<Problem>(`/problems/${id}`, { token }),
+export const materielsApi = {
+  getAll: (token: string) =>
+    apiFetch<Materiel[]>("/materiels", { token }),
 
-  create: (data: Partial<Problem>, token: string) =>
-    apiFetch<Problem>("/problems", {
+  getById: (id: number, token: string) =>
+    apiFetch<Materiel>(`/materiels/${id}`, { token }),
+
+  create: (data: Omit<Materiel, "id">, token: string) =>
+    apiFetch<Materiel>("/materiels", {
       method: "POST",
       body: JSON.stringify(data),
       token,
     }),
 
-  update: (id: string, data: Partial<Problem>, token: string) =>
-    apiFetch<Problem>(`/problems/${id}`, {
+  update: (id: number, data: Partial<Omit<Materiel, "id">>, token: string) =>
+    apiFetch<Materiel>(`/materiels/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
       token,
     }),
 
-  delete: (id: string, token: string) =>
-    apiFetch<void>(`/problems/${id}`, {
-      method: "DELETE",
-      token,
-    }),
-
-  addMessage: (id: string, message: string, token: string) =>
-    apiFetch<Message>(`/problems/${id}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ message }),
-      token,
-    }),
+  delete: (id: number, token: string) =>
+    apiFetch<void>(`/materiels/${id}`, { method: "DELETE", token }),
 }
 
-// Interventions API
+// ─── Affectations ─────────────────────────────────────────────────────────────
+
+export const affectationsApi = {
+  getAll: (token: string) =>
+    apiFetch<Affectation[]>("/affectations", { token }),
+
+  getById: (id: number, token: string) =>
+    apiFetch<Affectation>(`/affectations/${id}`, { token }),
+
+  getByMateriel: (materielId: number, token: string) =>
+    apiFetch<Affectation[]>(`/affectations/materiel/${materielId}`, { token }),
+
+  getByUser: (userId: number, token: string) =>
+    apiFetch<Affectation[]>(`/affectations/user/${userId}`, { token }),
+
+  create: (data: Omit<Affectation, "id" | "materiel" | "user">, token: string) =>
+    apiFetch<Affectation>("/affectations", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  update: (id: number, data: Partial<Omit<Affectation, "id" | "materiel" | "user">>, token: string) =>
+    apiFetch<Affectation>(`/affectations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  delete: (id: number, token: string) =>
+    apiFetch<void>(`/affectations/${id}`, { method: "DELETE", token }),
+}
+
+// ─── Problemes ────────────────────────────────────────────────────────────────
+
+export const problemesApi = {
+  getAll: (token: string) =>
+    apiFetch<Probleme[]>("/problemes", { token }),
+
+  getById: (id: number, token: string) =>
+    apiFetch<Probleme>(`/problemes/${id}`, { token }),
+
+  create: (
+    data: { materiel_id: number; description: string },
+    token: string
+  ) =>
+    apiFetch<Probleme>("/problemes", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  updateStatus: (id: number, status: ProblemeStatus, token: string) =>
+    apiFetch<Probleme>(`/problemes/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+      token,
+    }),
+
+  delete: (id: number, token: string) =>
+    apiFetch<void>(`/problemes/${id}`, { method: "DELETE", token }),
+}
+
+// ─── Interventions ────────────────────────────────────────────────────────────
+
 export const interventionsApi = {
   getAll: (token: string) =>
     apiFetch<Intervention[]>("/interventions", { token }),
 
-  getById: (id: string, token: string) =>
+  getById: (id: number, token: string) =>
     apiFetch<Intervention>(`/interventions/${id}`, { token }),
 
-  create: (data: Partial<Intervention>, token: string) =>
+  create: (
+    data: {
+      probleme_id: number
+      operator_id: number
+      company_id?: number
+      diagnostic?: string
+    },
+    token: string
+  ) =>
     apiFetch<Intervention>("/interventions", {
       method: "POST",
       body: JSON.stringify(data),
       token,
     }),
 
-  update: (id: string, data: Partial<Intervention>, token: string) =>
+  update: (
+    id: number,
+    data: Partial<
+      Pick<
+        Intervention,
+        | "company_id"
+        | "repare_par_admin"
+        | "diagnostic"
+        | "date_envoi_entreprise"
+        | "reference_envoi"
+        | "date_retour_drr"
+        | "reference_retour"
+        | "resultat"
+        | "date_intervention"
+        | "date_retour_final"
+      >
+    >,
+    token: string
+  ) =>
     apiFetch<Intervention>(`/interventions/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -294,100 +353,99 @@ export const interventionsApi = {
     }),
 }
 
-// Messages API
+// ─── Remplacements ────────────────────────────────────────────────────────────
+
+export const replacementsApi = {
+  getAll: (token: string) =>
+    apiFetch<Remplacement[]>("/remplacements", { token }),
+
+  getById: (id: number, token: string) =>
+    apiFetch<Remplacement>(`/remplacements/${id}`, { token }),
+
+  create: (
+    data: Omit<Remplacement, "id" | "intervention" | "ancienMateriel">,
+    token: string
+  ) =>
+    apiFetch<Remplacement>("/remplacements", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
 export const messagesApi = {
-  getConversations: (token: string) =>
-    apiFetch<Conversation[]>("/messages/conversations", { token }),
+  getByProbleme: (problemeId: number, token: string) =>
+    apiFetch<Message[]>(`/problemes/${problemeId}/messages`, { token }),
 
-  getMessages: (conversationId: string, token: string) =>
-    apiFetch<Message[]>(`/messages/conversations/${conversationId}`, { token }),
-
-  send: (conversationId: string, content: string, token: string) =>
-    apiFetch<Message>(`/messages/conversations/${conversationId}`, {
+  send: (
+    data: { probleme_id: number; receiver_id: number; message: string },
+    token: string
+  ) =>
+    apiFetch<Message>("/messages", {
       method: "POST",
-      body: JSON.stringify({ content }),
-      token,
-    }),
-
-  createConversation: (recipientId: string, token: string) =>
-    apiFetch<Conversation>("/messages/conversations", {
-      method: "POST",
-      body: JSON.stringify({ recipientId }),
+      body: JSON.stringify(data),
       token,
     }),
 }
 
-// Users API
-export const usersApi = {
-  getAll: (token: string) => apiFetch<User[]>("/users", { token }),
+// ─── Historique ───────────────────────────────────────────────────────────────
 
-  getById: (id: string, token: string) =>
-    apiFetch<User>(`/users/${id}`, { token }),
+export const historiqueApi = {
+  getAll: (token: string) =>
+    apiFetch<Historique[]>("/historique", { token }),
 
-  create: (data: Partial<User>, token: string) =>
-    apiFetch<User>("/users", {
-      method: "POST",
-      body: JSON.stringify(data),
-      token,
-    }),
-
-  update: (id: string, data: Partial<User>, token: string) =>
-    apiFetch<User>(`/users/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-      token,
-    }),
-
-  delete: (id: string, token: string) =>
-    apiFetch<void>(`/users/${id}`, {
-      method: "DELETE",
-      token,
-    }),
+  getByEntity: (entity_type: string, entity_id: number, token: string) =>
+    apiFetch<Historique[]>(`/historique/${entity_type}/${entity_id}`, { token }),
 }
 
-// Companies API
-export const companiesApi = {
-  getAll: (token: string) => apiFetch<Company[]>("/companies", { token }),
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
-  getById: (id: string, token: string) =>
-    apiFetch<Company>(`/companies/${id}`, { token }),
-
-  create: (data: Partial<Company>, token: string) =>
-    apiFetch<Company>("/companies", {
-      method: "POST",
-      body: JSON.stringify(data),
-      token,
-    }),
-
-  update: (id: string, data: Partial<Company>, token: string) =>
-    apiFetch<Company>(`/companies/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-      token,
-    }),
-
-  delete: (id: string, token: string) =>
-    apiFetch<void>(`/companies/${id}`, {
-      method: "DELETE",
-      token,
-    }),
+export interface DashboardStats {
+  totalMateriels: number
+  activeProblemes: number
+  pendingInterventions: number
+  resolvedThisMonth: number
+  problemesByStatus: { status: ProblemeStatus; count: number }[]
+  materielsByType: { type: string; count: number }[]
 }
 
-// Dashboard API
+export interface ChartData {
+  problemesByMonth: { month: string; count: number }[]
+  interventionsByResult: { result: InterventionResult; count: number }[]
+  materielsByType: { type: string; count: number }[]
+}
+
 export const dashboardApi = {
   getStats: (token: string) =>
     apiFetch<DashboardStats>("/dashboard/stats", { token }),
-
-  getRecentActivity: (token: string) =>
-    apiFetch<Activity[]>("/dashboard/activity", { token }),
 
   getChartData: (token: string) =>
     apiFetch<ChartData>("/dashboard/charts", { token }),
 }
 
-// Settings API
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
+export interface Settings {
+  profile: {
+    name: string
+    email: string
+  }
+  notifications: {
+    email: boolean
+    problemUpdates: boolean
+    interventionUpdates: boolean
+  }
+  appearance: {
+    theme: "light" | "dark" | "system"
+    language: string
+  }
+}
+
 export const settingsApi = {
-  get: (token: string) => apiFetch<Settings>("/settings", { token }),
+  get: (token: string) =>
+    apiFetch<Settings>("/settings", { token }),
 
   update: (data: Partial<Settings>, token: string) =>
     apiFetch<Settings>("/settings", {

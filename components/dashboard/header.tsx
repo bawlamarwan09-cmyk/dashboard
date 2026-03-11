@@ -53,16 +53,17 @@ export function Header({ onMenuClick }: HeaderProps) {
     )
   }
 
-  const fullName = user?.name || "John Doe"
-  const userInitials = fullName
-    .split(" ")
-    .map((part) => part.charAt(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase()
+ const fullName = user?.name || "John Doe"
 
-  const userEmail = user?.email || "john.doe@company.com"
+const userInitials = fullName
+  .split(" ")
+  .filter(Boolean)
+  .map((part) => part.charAt(0))
+  .join("")
+  .slice(0, 2)
+  .toUpperCase()
 
+const userEmail = user?.email || "john.doe@company.com"
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
       <div className="flex items-center gap-4">

@@ -50,12 +50,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { useDevices } from "@/lib/hooks/use-api"
-import { devicesApi, Device } from "@/lib/api"
+import { useMateriels } from "@/lib/hooks/use-api"
+import { materielsApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { mutate } from "swr"
 
-const getDeviceIcon = (type: string) => {
+const getMaterielIcon = (type: string) => {
   switch (type?.toLowerCase()) {
     case "laptop":
       return Laptop
@@ -66,68 +66,53 @@ const getDeviceIcon = (type: string) => {
   }
 }
 
-const getStatusBadge = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case "operational":
-    case "active":
-      return <Badge className="bg-success/10 text-success hover:bg-success/20">Active</Badge>
-    case "in_repair":
-    case "under repair":
-      return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">Under Repair</Badge>
-    case "shipped":
-      return <Badge className="bg-primary/10 text-primary hover:bg-primary/20">Shipped</Badge>
-    case "decommissioned":
-    case "inactive":
-      return <Badge variant="secondary">Inactive</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
-  }
-}
-
 export default function DevicesPage() {
   const { token } = useAuth()
-  const { data: devices, isLoading, error } = useDevices()
+  const { data: materiels, isLoading, error } = useMateriels()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("all")
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [newDevice, setNewDevice] = useState({
+  const [newMateriel, setNewMateriel] = useState({
     type: "",
-    brand: "",
-    model: "",
-    inventoryNumber: "",
-    serialNumber: "",
+    marque: "",
+    modele: "",
+    code_onee: "",
+    numero_serie: "",
+    numero_inventaire: "",
+    date_arrive_drr: "",
   })
 
-  const handleAddDevice = async () => {
+  const handleAddMateriel = async () => {
     if (!token) return
     setIsSubmitting(true)
     try {
-      await devicesApi.create({
-        name: `${newDevice.brand} ${newDevice.model}`,
-        type: newDevice.type as Device["type"],
-        inventoryNumber: newDevice.inventoryNumber,
-        serialNumber: newDevice.serialNumber,
-        status: "operational",
-      }, token)
-      mutate(["devices", token])
+      await materielsApi.create(newMateriel, token)
+      mutate(["materiels", token])
       setAddDialogOpen(false)
-      setNewDevice({ type: "", brand: "", model: "", inventoryNumber: "", serialNumber: "" })
+      setNewMateriel({
+        type: "",
+        marque: "",
+        modele: "",
+        code_onee: "",
+        numero_serie: "",
+        numero_inventaire: "",
+        date_arrive_drr: "",
+      })
     } catch (err) {
-      console.error("Failed to add device:", err)
+      console.error("Failed to add materiel:", err)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleDeleteDevice = async (id: string) => {
+  const handleDeleteMateriel = async (id: number) => {
     if (!token) return
     try {
-      await devicesApi.delete(id, token)
-      mutate(["devices", token])
+      await materielsApi.delete(id, token)
+      mutate(["materiels", token])
     } catch (err) {
-      console.error("Failed to delete device:", err)
+      console.error("Failed to delete materiel:", err)
     }
   }
 
@@ -142,49 +127,54 @@ export default function DevicesPage() {
   if (error) {
     return (
       <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
-        Failed to load devices. Please try again.
+        Failed to load materiels. Please try again.
       </div>
     )
   }
 
-  const deviceList = devices || []
+  const materielList = materiels || []
 
-  const filteredDevices = deviceList.filter((device) => {
+  const filteredMateriels = materielList.filter((m) => {
     const matchesSearch =
-      device.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      device.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      device.inventoryNumber?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = typeFilter === "all" || device.type?.toLowerCase() === typeFilter.toLowerCase()
-    const matchesStatus = statusFilter === "all" || device.status?.toLowerCase() === statusFilter.toLowerCase()
-    return matchesSearch && matchesType && matchesStatus
+      m.marque?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.modele?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.numero_serie?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.numero_inventaire?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.code_onee?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesType =
+      typeFilter === "all" || m.type?.toLowerCase() === typeFilter.toLowerCase()
+    return matchesSearch && matchesType
   })
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Devices</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Materiels</h1>
           <p className="text-muted-foreground">Manage all IT equipment in your organization</p>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Add Device
+              Add Materiel
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Add New Device</DialogTitle>
+              <DialogTitle>Add New Materiel</DialogTitle>
               <DialogDescription>
-                Enter the details of the new device to add to your inventory.
+                Enter the details of the new materiel to add to your inventory.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="type">Device Type</Label>
-                  <Select value={newDevice.type} onValueChange={(v) => setNewDevice({ ...newDevice, type: v })}>
+                  <Label>Type</Label>
+                  <Select
+                    value={newMateriel.type}
+                    onValueChange={(v) => setNewMateriel({ ...newMateriel, type: v })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -197,41 +187,55 @@ export default function DevicesPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="brand">Brand</Label>
+                  <Label>Marque</Label>
                   <Input
-                    id="brand"
                     placeholder="e.g., Dell, HP"
-                    value={newDevice.brand}
-                    onChange={(e) => setNewDevice({ ...newDevice, brand: e.target.value })}
+                    value={newMateriel.marque}
+                    onChange={(e) => setNewMateriel({ ...newMateriel, marque: e.target.value })}
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="model">Model</Label>
+                <Label>Modele</Label>
                 <Input
-                  id="model"
                   placeholder="e.g., OptiPlex 7090"
-                  value={newDevice.model}
-                  onChange={(e) => setNewDevice({ ...newDevice, model: e.target.value })}
+                  value={newMateriel.modele}
+                  onChange={(e) => setNewMateriel({ ...newMateriel, modele: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="inventory">Inventory Number</Label>
+                  <Label>Code ONEE</Label>
                   <Input
-                    id="inventory"
-                    placeholder="INV-2024-XXX"
-                    value={newDevice.inventoryNumber}
-                    onChange={(e) => setNewDevice({ ...newDevice, inventoryNumber: e.target.value })}
+                    placeholder="Code ONEE unique"
+                    value={newMateriel.code_onee}
+                    onChange={(e) => setNewMateriel({ ...newMateriel, code_onee: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="serial">Serial Number</Label>
+                  <Label>Numéro Série</Label>
                   <Input
-                    id="serial"
-                    placeholder="Device serial number"
-                    value={newDevice.serialNumber}
-                    onChange={(e) => setNewDevice({ ...newDevice, serialNumber: e.target.value })}
+                    placeholder="Serial number"
+                    value={newMateriel.numero_serie}
+                    onChange={(e) => setNewMateriel({ ...newMateriel, numero_serie: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Numéro Inventaire</Label>
+                  <Input
+                    placeholder="Inventory number"
+                    value={newMateriel.numero_inventaire}
+                    onChange={(e) => setNewMateriel({ ...newMateriel, numero_inventaire: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date Arrivée DRR</Label>
+                  <Input
+                    type="date"
+                    value={newMateriel.date_arrive_drr}
+                    onChange={(e) => setNewMateriel({ ...newMateriel, date_arrive_drr: e.target.value })}
                   />
                 </div>
               </div>
@@ -240,9 +244,17 @@ export default function DevicesPage() {
               <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button onClick={handleAddDevice} disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Add Device
+             <Button 
+  onClick={(e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    console.log("clicked", { token, newMateriel })
+    handleAddMateriel()
+  }} 
+  disabled={isSubmitting}
+>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Add Materiel
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -253,38 +265,25 @@ export default function DevicesPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by brand, model, serial..."
+            placeholder="Search by marque, modele, serial, code ONEE..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[130px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="pc">PC</SelectItem>
-              <SelectItem value="laptop">Laptop</SelectItem>
-              <SelectItem value="printer">Printer</SelectItem>
-              <SelectItem value="monitor">Monitor</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="operational">Active</SelectItem>
-              <SelectItem value="in_repair">Under Repair</SelectItem>
-              <SelectItem value="decommissioned">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[130px]">
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="pc">PC</SelectItem>
+            <SelectItem value="laptop">Laptop</SelectItem>
+            <SelectItem value="printer">Printer</SelectItem>
+            <SelectItem value="monitor">Monitor</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-xl border border-border bg-card shadow-sm">
@@ -292,46 +291,49 @@ export default function DevicesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Type</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="hidden md:table-cell">Inventory #</TableHead>
-              <TableHead className="hidden lg:table-cell">Serial #</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden sm:table-cell">Assigned To</TableHead>
+              <TableHead>Marque / Modèle</TableHead>
+              <TableHead className="hidden md:table-cell">Code ONEE</TableHead>
+              <TableHead className="hidden md:table-cell">N° Inventaire</TableHead>
+              <TableHead className="hidden lg:table-cell">N° Série</TableHead>
+              <TableHead className="hidden lg:table-cell">Date Arrivée</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredDevices.length === 0 ? (
+            {filteredMateriels.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No devices found
+                  No materiels found
                 </TableCell>
               </TableRow>
             ) : (
-              filteredDevices.map((device) => {
-                const DeviceIcon = getDeviceIcon(device.type)
+              filteredMateriels.map((m) => {
+                const MaterielIcon = getMaterielIcon(m.type)
                 return (
-                  <TableRow key={device.id}>
+                  <TableRow key={m.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-                          <DeviceIcon className="h-4 w-4 text-muted-foreground" />
+                          <MaterielIcon className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <span className="hidden sm:inline">{device.type}</span>
+                        <span className="hidden sm:inline">{m.type}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <p className="font-medium text-foreground">{device.name}</p>
+                      <p className="font-medium text-foreground">{m.marque}</p>
+                      <p className="text-sm text-muted-foreground">{m.modele}</p>
                     </TableCell>
                     <TableCell className="hidden md:table-cell font-mono text-sm">
-                      {device.inventoryNumber}
+                      {m.code_onee}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell font-mono text-sm">
+                      {m.numero_inventaire}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell font-mono text-sm">
-                      {device.serialNumber}
+                      {m.numero_serie}
                     </TableCell>
-                    <TableCell>{getStatusBadge(device.status)}</TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
-                      {device.assignedToName || "Unassigned"}
+                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                      {new Date(m.date_arrive_drr).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -356,7 +358,7 @@ export default function DevicesPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive"
-                            onClick={() => handleDeleteDevice(device.id)}
+                            onClick={() => handleDeleteMateriel(m.id)}
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
@@ -373,14 +375,10 @@ export default function DevicesPage() {
       </div>
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <p>Showing {filteredDevices.length} of {deviceList.length} devices</p>
+        <p>Showing {filteredMateriels.length} of {materielList.length} materiels</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled>
-            Previous
-          </Button>
-          <Button variant="outline" size="sm">
-            Next
-          </Button>
+          <Button variant="outline" size="sm" disabled>Previous</Button>
+          <Button variant="outline" size="sm">Next</Button>
         </div>
       </div>
     </div>
