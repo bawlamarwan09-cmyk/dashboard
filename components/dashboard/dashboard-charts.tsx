@@ -12,35 +12,48 @@ import {
   Pie,
   Cell,
   Legend,
-  LineChart,
-  Line,
 } from "recharts"
 
-const problemsByStatus = [
-  { name: "Open", value: 24, color: "hsl(var(--chart-4))" },
-  { name: "In Progress", value: 18, color: "hsl(var(--chart-3))" },
-  { name: "Shipped", value: 8, color: "hsl(var(--chart-1))" },
-  { name: "Resolved", value: 45, color: "hsl(var(--chart-2))" },
+import type { ChartData, DashboardStats, ProblemeStatus } from "@/lib/api"
+
+const CHART_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ]
 
-const problemsByDeviceType = [
-  { name: "PCs", problems: 35 },
-  { name: "Laptops", problems: 28 },
-  { name: "Printers", problems: 15 },
-  { name: "Monitors", problems: 12 },
-  { name: "Others", problems: 5 },
-]
+function statusLabel(status: ProblemeStatus): string {
+  switch (status) {
+    case "DECLARED":
+      return "Open"
+    case "UNDER_VERIFICATION":
+      return "In Verification"
+    case "SENT_TO_COMPANY":
+      return "Shipped"
+    case "REPAIRED":
+      return "Repaired"
+    case "REPLACED":
+      return "Replaced"
+    case "CLOSED":
+      return "Resolved"
+    default:
+      return status
+  }
+}
 
-const repairTrend = [
-  { month: "Jan", repaired: 12, replaced: 3 },
-  { month: "Feb", repaired: 18, replaced: 5 },
-  { month: "Mar", repaired: 15, replaced: 2 },
-  { month: "Apr", repaired: 22, replaced: 4 },
-  { month: "May", repaired: 28, replaced: 6 },
-  { month: "Jun", repaired: 25, replaced: 3 },
-]
+function colorForIndex(i: number): string {
+  return CHART_COLORS[i % CHART_COLORS.length] || "hsl(var(--chart-1))"
+}
 
-export function ProblemsByStatusChart() {
+export function ProblemsByStatusChart({ stats }: { stats?: DashboardStats }) {
+  const data = (stats?.problemesByStatus ?? []).map((d, i) => ({
+    name: statusLabel(d.status),
+    value: d.count,
+    color: colorForIndex(i),
+  }))
+
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <h3 className="mb-4 font-semibold text-card-foreground">Problems by Status</h3>
@@ -48,7 +61,7 @@ export function ProblemsByStatusChart() {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={problemsByStatus}
+              data={data}
               cx="50%"
               cy="50%"
               innerRadius={60}
@@ -56,7 +69,7 @@ export function ProblemsByStatusChart() {
               paddingAngle={2}
               dataKey="value"
             >
-              {problemsByStatus.map((entry, index) => (
+              {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
@@ -75,13 +88,18 @@ export function ProblemsByStatusChart() {
   )
 }
 
-export function ProblemsByDeviceChart() {
+export function ProblemsByDeviceChart({ stats }: { stats?: DashboardStats }) {
+  const data = (stats?.materielsByType ?? []).map((d) => ({
+    name: d.type,
+    count: d.count,
+  }))
+
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h3 className="mb-4 font-semibold text-card-foreground">Problems by Device Type</h3>
+      <h3 className="mb-4 font-semibold text-card-foreground">Materiels by Device Type</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={problemsByDeviceType} layout="vertical">
+          <BarChart data={data} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
             <YAxis
@@ -97,7 +115,7 @@ export function ProblemsByDeviceChart() {
                 borderRadius: "8px",
               }}
             />
-            <Bar dataKey="problems" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -105,16 +123,36 @@ export function ProblemsByDeviceChart() {
   )
 }
 
-export function RepairTrendChart() {
+export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
+  const data = (chartData?.interventionsByResult ?? []).map((d, i) => {
+    const label =
+      d.result === "REPAIRED" ? "Repairs" : d.result === "REPLACED" ? "Replacements" : d.result
+    return {
+      name: label,
+      value: d.count,
+      color: colorForIndex(i),
+    }
+  })
+
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h3 className="mb-4 font-semibold text-card-foreground">Repair vs Replacement Trend</h3>
+      <h3 className="mb-4 font-semibold text-card-foreground">Repairs vs Replacements</h3>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={repairTrend}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
-            <YAxis stroke="hsl(var(--muted-foreground))" />
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={55}
+              outerRadius={85}
+              paddingAngle={2}
+              dataKey="value"
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
             <Tooltip
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
@@ -123,21 +161,7 @@ export function RepairTrendChart() {
               }}
             />
             <Legend />
-            <Line
-              type="monotone"
-              dataKey="repaired"
-              stroke="hsl(var(--chart-2))"
-              strokeWidth={2}
-              dot={{ fill: "hsl(var(--chart-2))" }}
-            />
-            <Line
-              type="monotone"
-              dataKey="replaced"
-              stroke="hsl(var(--chart-4))"
-              strokeWidth={2}
-              dot={{ fill: "hsl(var(--chart-4))" }}
-            />
-          </LineChart>
+          </PieChart>
         </ResponsiveContainer>
       </div>
     </div>

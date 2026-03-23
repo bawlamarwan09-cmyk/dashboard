@@ -8,12 +8,20 @@ import {
   ProblemsByDeviceChart,
   RepairTrendChart,
 } from "@/components/dashboard/dashboard-charts"
-import { useDashboardStats } from "@/lib/hooks/use-api"
+import { useDashboardCharts, useDashboardStats } from "@/lib/hooks/use-api"
 
 export default function DashboardPage() {
-  const { data: stats, isLoading, error } = useDashboardStats()
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useDashboardStats()
+  const {
+    data: chartData,
+    error: chartsError,
+  } = useDashboardCharts()
 
-  if (isLoading) {
+  if (statsLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -21,7 +29,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (error) {
+  if (statsError) {
     return (
       <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
         Failed to load dashboard data. Please try again.
@@ -42,50 +50,46 @@ export default function DashboardPage() {
         <StatsCard
           title="Total Materiels"
           value={stats?.totalMateriels ?? 0}
-          change="+12 this month"
-          changeType="positive"
           icon={Monitor}
           iconColor="bg-primary/10 text-primary"
         />
         <StatsCard
           title="Active Problemes"
           value={stats?.activeProblemes ?? 0}
-          change="+3 today"
-          changeType="negative"
           icon={AlertCircle}
           iconColor="bg-destructive/10 text-destructive"
         />
         <StatsCard
           title="Under Repair"
           value={stats?.pendingInterventions ?? 0}
-          change="5 internal, 13 external"
-          changeType="neutral"
           icon={Wrench}
           iconColor="bg-warning/10 text-warning"
         />
         <StatsCard
           title="Sent to Companies"
           value={stats?.resolvedThisMonth ?? 0}
-          change="2 returning soon"
-          changeType="neutral"
           icon={Truck}
           iconColor="bg-chart-5/10 text-chart-5"
         />
         <StatsCard
           title="Resolved"
           value={stats?.resolvedThisMonth ?? 0}
-          change="+45 this month"
-          changeType="positive"
           icon={CheckCircle2}
           iconColor="bg-success/10 text-success"
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <ProblemsByStatusChart />
-        <ProblemsByDeviceChart />
-        <RepairTrendChart />
+        <ProblemsByStatusChart stats={stats} />
+        <ProblemsByDeviceChart stats={stats} />
+        <RepairTrendChart chartData={chartData} />
       </div>
+
+      {chartsError && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Charts couldn&apos;t be loaded. The dashboard still shows summary data.
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ActivityFeed />
