@@ -27,8 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { cn } from "@/lib/utils"
-import { useProbleme, useUsers } from "@/lib/hooks/use-api"
+import { useAffectationsByUser, useProbleme, useUsers } from "@/lib/hooks/use-api"
 import { problemesApi, messagesApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { mutate } from "swr"
@@ -88,6 +89,11 @@ const [operatorId, setOperatorId] = useState("")
 const [companyId, setCompanyId] = useState("")
 const [statusError, setStatusError] = useState<string | null>(null)
 const { data: users } = useUsers()
+  const { data: reporterAffectations } = useAffectationsByUser(
+    probleme?.declared_by_user_id
+  )
+  const reporterCurrentAffectation = reporterAffectations?.[0]
+
   // Set mounted flag on client side
   useEffect(() => {
     setIsMounted(true)
@@ -383,17 +389,89 @@ const { data: users } = useUsers()
               <User className="h-5 w-5" />
               Reported By
             </h3>
-            <div className="mt-4 flex items-center gap-3">
-              <Avatar className="h-12 w-12">
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  {getInitials(probleme.declaredBy?.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-medium text-foreground">{probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}</p>
-                <p className="text-sm text-muted-foreground">{probleme.declaredBy?.email ?? "—"}</p>
+            {user?.role === "ADMIN" ? (
+              <HoverCard openDelay={150}>
+                <HoverCardTrigger asChild>
+                  <button
+                    type="button"
+                    className="mt-4 flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-muted/50"
+                  >
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {getInitials(probleme.declaredBy?.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{probleme.declaredBy?.email ?? "—"}</p>
+                    </div>
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent className="w-80">
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-foreground">Reporter Full Info</p>
+                    <dl className="space-y-2 text-sm">
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Name</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Email</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {probleme.declaredBy?.email ?? "—"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Role</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {probleme.declaredBy?.role ?? "USER"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Entite</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {reporterCurrentAffectation?.entite ?? "—"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Agence</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {reporterCurrentAffectation?.agence ?? "—"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Secteur</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {reporterCurrentAffectation?.secteur ?? "—"}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Centre</dt>
+                        <dd className="font-medium text-foreground text-right">
+                          {reporterCurrentAffectation?.centre ?? "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
+            ) : (
+              <div className="mt-4 flex items-center gap-3">
+                <Avatar className="h-12 w-12">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {getInitials(probleme.declaredBy?.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium text-foreground">{probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}</p>
+                  <p className="text-sm text-muted-foreground">{probleme.declaredBy?.email ?? "—"}</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Operator Actions */}

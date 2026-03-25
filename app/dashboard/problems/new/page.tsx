@@ -15,18 +15,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useMateriels } from "@/lib/hooks/use-api"
+import { useAffectationsByUser } from "@/lib/hooks/use-api"
 import { problemesApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { mutate } from "swr"
 
 export default function NewProblemePage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <NewProblemeForm />
     </Suspense>
   )
@@ -34,29 +36,48 @@ export default function NewProblemePage() {
 
 function NewProblemeForm() {
   const router = useRouter()
-  const { token } = useAuth()
-  const { data: materiels, isLoading: loadingMateriels } = useMateriels()
+  const { token, user } = useAuth()
+
+  const {
+    data: affectations,
+    isLoading: loadingMateriels,
+  } = useAffectationsByUser(user?.id)
+
+  const materiels = (affectations || [])
+    .map((a) => a.materiel)
+    .filter(Boolean)
 
   const [selectedMaterielId, setSelectedMaterielId] = useState("")
   const [description, setDescription] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const selectedMateriel = materiels?.find((m) => String(m.id) === selectedMaterielId)
+  const selectedMateriel = materiels.find(
+    (m) => String(m!.id) === selectedMaterielId
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!token || !selectedMaterielId || description.length < 20) return
+
+    if (!token || !selectedMaterielId || description.length < 10) {
+      setError("Description must be at least 10 characters")
+      return
+    }
 
     setIsSubmitting(true)
     setError(null)
+
     try {
       await problemesApi.create(
-        { materiel_id: parseInt(selectedMaterielId), description },
+        {
+          materiel_id: parseInt(selectedMaterielId),
+          description,
+        },
         token
       )
+
       mutate(["problems", token])
-      router.push("/dashboard/problems")
+      router.push("/dashboard/my-devices")
     } catch (err: any) {
       setError(err.message || "Failed to submit problème")
     } finally {
@@ -73,8 +94,12 @@ function NewProblemeForm() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Report Problème</h1>
-          <p className="text-muted-foreground">Submit a new IT equipment issue</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Report Problème
+          </h1>
+          <p className="text-muted-foreground">
+            Submit a new IT equipment issue
+          </p>
         </div>
       </div>
 
@@ -82,18 +107,23 @@ function NewProblemeForm() {
         <Info className="h-4 w-4" />
         <AlertTitle>Before reporting</AlertTitle>
         <AlertDescription>
-          Please ensure you have tried basic troubleshooting steps such as restarting the device.
-          Provide as much detail as possible to help our IT team diagnose the issue quickly.
+          Please ensure you have tried basic troubleshooting steps such as
+          restarting the device. Provide as much detail as possible to help our
+          IT team diagnose the issue quickly.
         </AlertDescription>
       </Alert>
 
       {error && (
-        <div className="rounded-lg bg-destructive/10 p-4 text-destructive text-sm">{error}</div>
+        <div className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="font-semibold text-card-foreground">Matériel Selection</h3>
+          <h3 className="font-semibold text-card-foreground">
+            Matériel Selection
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Choose the matériel you are experiencing issues with
           </p>
@@ -101,23 +131,32 @@ function NewProblemeForm() {
           <div className="mt-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="materiel">Select Matériel</Label>
+
               {loadingMateriels ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading materiels...
                 </div>
               ) : (
-                <Select value={selectedMaterielId} onValueChange={setSelectedMaterielId}>
+                <Select
+                  value={selectedMaterielId}
+                  onValueChange={setSelectedMaterielId}
+                >
                   <SelectTrigger id="materiel">
                     <SelectValue placeholder="Choose a matériel" />
                   </SelectTrigger>
+
                   <SelectContent>
-                    {(materiels || []).map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
+                    {materiels.map((m) => (
+                      <SelectItem key={m!.id} value={String(m!.id)}>
                         <div className="flex items-center gap-2">
                           <Monitor className="h-4 w-4 text-muted-foreground" />
-                          <span>{m.marque} {m.modele}</span>
-                          <span className="text-muted-foreground">({m.type})</span>
+                          <span>
+                            {m!.marque} {m!.modele}
+                          </span>
+                          <span className="text-muted-foreground">
+                            ({m!.type})
+                          </span>
                         </div>
                       </SelectItem>
                     ))}
@@ -132,26 +171,41 @@ function NewProblemeForm() {
                   <Monitor className="h-4 w-4" />
                   Matériel Information
                 </h4>
+
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <dt className="text-muted-foreground">Type</dt>
-                    <dd className="font-medium text-foreground">{selectedMateriel.type}</dd>
+                    <dd className="font-medium text-foreground">
+                      {selectedMateriel.type}
+                    </dd>
                   </div>
+
                   <div>
                     <dt className="text-muted-foreground">Marque / Modèle</dt>
-                    <dd className="font-medium text-foreground">{selectedMateriel.marque} {selectedMateriel.modele}</dd>
+                    <dd className="font-medium text-foreground">
+                      {selectedMateriel.marque} {selectedMateriel.modele}
+                    </dd>
                   </div>
+
                   <div>
                     <dt className="text-muted-foreground">N° Inventaire</dt>
-                    <dd className="font-mono text-foreground">{selectedMateriel.numero_inventaire}</dd>
+                    <dd className="font-mono text-foreground">
+                      {selectedMateriel.numero_inventaire}
+                    </dd>
                   </div>
+
                   <div>
                     <dt className="text-muted-foreground">N° Série</dt>
-                    <dd className="font-mono text-foreground">{selectedMateriel.numero_serie}</dd>
+                    <dd className="font-mono text-foreground">
+                      {selectedMateriel.numero_serie}
+                    </dd>
                   </div>
+
                   <div>
                     <dt className="text-muted-foreground">Code ONEE</dt>
-                    <dd className="font-mono text-foreground">{selectedMateriel.code_onee}</dd>
+                    <dd className="font-mono text-foreground">
+                      {selectedMateriel.code_onee}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -160,7 +214,9 @@ function NewProblemeForm() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="font-semibold text-card-foreground">Problem Details</h3>
+          <h3 className="font-semibold text-card-foreground">
+            Problem Details
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Describe the issue you are experiencing in detail
           </p>
@@ -175,24 +231,27 @@ function NewProblemeForm() {
               className="min-h-[150px]"
             />
             <p className="text-xs text-muted-foreground">
-              {description.length}/20 minimum characters.{" "}
-              {description.length < 20 && (
-                <span className="text-destructive">{20 - description.length} more needed.</span>
+              {description.length}/10 minimum characters.{" "}
+              {description.length < 10 && (
+                <span className="text-destructive">
+                  {10 - description.length} more needed.
+                </span>
               )}
             </p>
           </div>
         </div>
 
         <div className="flex gap-3">
-          <Link href="/dashboard/problems" className="flex-1">
+          <Link href="/dashboard/my-devices" className="flex-1">
             <Button variant="outline" className="w-full" type="button">
               Cancel
             </Button>
           </Link>
+
           <Button
             type="submit"
             className="flex-1"
-            disabled={!selectedMaterielId || description.length < 20 || isSubmitting}
+            disabled={!selectedMaterielId || description.length < 10 || isSubmitting}
           >
             {isSubmitting ? (
               <>

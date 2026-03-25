@@ -84,7 +84,6 @@ export interface Affectation {
   secteur: string
   centre: string
   date_debut: string
-  date_fin?: string | null
   materiel?: Materiel
   user?: User
 }
@@ -195,14 +194,21 @@ export const usersApi = {
   getById: (id: number, token: string) =>
     apiFetch<User>(`/users/${id}`, { token }),
 
-  create: (data: Omit<User, "id" | "created_at"> & { password: string }, token: string) =>
+  create: (
+    data: Omit<User, "id" | "created_at"> & { password: string },
+    token: string
+  ) =>
     apiFetch<User>("/users", {
       method: "POST",
       body: JSON.stringify(data),
       token,
     }),
 
-  update: (id: number, data: Partial<Omit<User, "id" | "created_at">>, token: string) =>
+  update: (
+    id: number,
+    data: Partial<Omit<User, "id" | "created_at">>,
+    token: string
+  ) =>
     apiFetch<User>(`/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -229,7 +235,11 @@ export const materielsApi = {
       token,
     }),
 
-  update: (id: number, data: Partial<Omit<Materiel, "id">>, token: string) =>
+  update: (
+    id: number,
+    data: Partial<Omit<Materiel, "id">>,
+    token: string
+  ) =>
     apiFetch<Materiel>(`/materiels/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -255,20 +265,43 @@ export const affectationsApi = {
   getByUser: (userId: number, token: string) =>
     apiFetch<Affectation[]>(`/affectations/user/${userId}`, { token }),
 
-  create: (data: Omit<Affectation, "id" | "materiel" | "user">, token: string) =>
+  /**
+   * Assign a device to a user.
+   * Backend handles assignment history and closes any current open affectation.
+   */
+  create: (
+    data: Omit<Affectation, "id" | "materiel" | "user">,
+    token: string
+  ) =>
     apiFetch<Affectation>("/affectations", {
       method: "POST",
       body: JSON.stringify(data),
       token,
     }),
 
-  update: (id: number, data: Partial<Omit<Affectation, "id" | "materiel" | "user">>, token: string) =>
+  /**
+   * Update assignment details (entite, agence, secteur, centre).
+   * Does NOT change materiel_id or user_id — delete + recreate for that.
+   */
+  update: (
+    id: number,
+    data: Partial<Pick<Affectation, "entite" | "agence" | "secteur" | "centre">>,
+    token: string
+  ) =>
     apiFetch<Affectation>(`/affectations/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
       token,
     }),
 
+  /**
+   * Unassign a device — simply deletes the affectation.
+   * The device becomes available for reassignment immediately.
+   */
+  unassign: (id: number, token: string) =>
+    apiFetch<void>(`/affectations/${id}`, { method: "DELETE", token }),
+
+  // Kept as alias for consistency with REST conventions
   delete: (id: number, token: string) =>
     apiFetch<void>(`/affectations/${id}`, { method: "DELETE", token }),
 }
@@ -454,7 +487,11 @@ export const settingsApi = {
       token,
     }),
 
-  updatePassword: (currentPassword: string, newPassword: string, token: string) =>
+  updatePassword: (
+    currentPassword: string,
+    newPassword: string,
+    token: string
+  ) =>
     apiFetch<void>("/settings/password", {
       method: "PUT",
       body: JSON.stringify({ currentPassword, newPassword }),

@@ -33,6 +33,7 @@ const getActiveProblemeStatus = (statuses: ProblemeStatus[]) => {
 export default function MyDevicesPage() {
   const { user } = useAuth()
   const { data: affectations, isLoading, error } = useAffectationsByUser(user?.id)
+  
 
   if (isLoading) {
     return (
@@ -51,8 +52,7 @@ export default function MyDevicesPage() {
   }
 
   // Only current affectations (date_fin is null)
-  const currentAffectations = (affectations || []).filter((a) => !a.date_fin)
-
+const currentAffectations = (affectations || []).filter(Boolean)
   return (
     <div className="space-y-6">
       <div>
@@ -153,21 +153,7 @@ export default function MyDevicesPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h3 className="font-semibold text-card-foreground">Need Help?</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          If you&apos;re experiencing issues with any of your devices, click the &quot;Report Problem&quot; button
-          on the device card. Our IT team will be notified and will assist you as soon as possible.
-        </p>
-        <div className="mt-4 flex gap-2">
-          <Link href="/dashboard/problems">
-            <Button variant="outline">View My Problèmes</Button>
-          </Link>
-          <Link href="/dashboard/messages">
-            <Button variant="outline">Contact IT Support</Button>
-          </Link>
-        </div>
-      </div>
+     
     </div>
   )
 }

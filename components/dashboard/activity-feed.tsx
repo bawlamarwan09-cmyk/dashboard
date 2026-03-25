@@ -1,127 +1,150 @@
 "use client"
 
-import { useMemo } from "react"
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Truck,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
 import { useHistorique } from "@/lib/hooks/use-api"
+import { Loader2, AlertCircle, Wrench, CheckCircle2, Truck, Clock, User } from "lucide-react"
 import type { Historique } from "@/lib/api"
 
-function formatRelativeTime(iso: string): string {
-  const date = new Date(iso)
-  const ms = date.getTime()
-  if (!Number.isFinite(ms)) return iso
+function getActivityIcon(action: string, entityType: string) {
+  const a = action.toLowerCase()
+  const e = entityType.toLowerCase()
 
-  const diffMs = Date.now() - ms
-  const minutes = Math.floor(diffMs / 60000)
-  if (minutes < 1) return "Just now"
-  if (minutes < 60) return `${minutes} minutes ago`
-
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} hours ago`
-
-  const days = Math.floor(hours / 24)
-  return `${days} days ago`
+  if (a.includes("closed") || a.includes("resolved") || a.includes("repaired"))
+    return <CheckCircle2 className="h-4 w-4 text-success" />
+  if (a.includes("sent") || a.includes("company"))
+    return <Truck className="h-4 w-4 text-chart-5" />
+  if (a.includes("intervention") || e === "intervention" || a.includes("repair"))
+    return <Wrench className="h-4 w-4 text-warning" />
+  if (a.includes("problem") || e === "probleme" || a.includes("declared"))
+    return <AlertCircle className="h-4 w-4 text-destructive" />
+  return <User className="h-4 w-4 text-muted-foreground" />
 }
 
-function getActivityIcon(entityType?: string, action?: string): {
-  icon: LucideIcon
-  iconColor: string
-} {
-  const text = `${entityType ?? ""} ${action ?? ""}`.toUpperCase()
+function getActivityColor(action: string) {
+  const a = action.toLowerCase()
+  if (a.includes("closed") || a.includes("resolved") || a.includes("repaired"))
+    return "bg-success/10"
+  if (a.includes("sent") || a.includes("company"))
+    return "bg-chart-5/10"
+  if (a.includes("intervention") || a.includes("repair"))
+    return "bg-warning/10"
+  if (a.includes("problem") || a.includes("declared"))
+    return "bg-destructive/10"
+  return "bg-muted"
+}
 
-  if (text.includes("MESSAGE")) return { icon: CheckCircle2, iconColor: "text-success bg-success/10" }
-  if (text.includes("PROBLEME"))
-    return { icon: AlertCircle, iconColor: "text-destructive bg-destructive/10" }
-  if (text.includes("INTERVENTION")) return { icon: Wrench, iconColor: "text-warning bg-warning/10" }
-  if (text.includes("SENT") || text.includes("SHIP") || text.includes("COMPANY")) {
-    return { icon: Truck, iconColor: "text-primary bg-primary/10" }
-  }
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
 
-  return { icon: Clock, iconColor: "text-muted-foreground bg-muted" }
+  if (minutes < 1) return "just now"
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+  return new Date(dateStr).toLocaleDateString("en", {
+    day: "numeric",
+    month: "short",
+  })
+}
+
+function ActivityItem({ item }: { item: Historique }) {
+  return (
+    <div className="flex items-start gap-3 py-3">
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${getActivityColor(item.action)}`}
+      >
+        {getActivityIcon(item.action, item.entity_type)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground leading-snug">
+          {item.action}
+        </p>
+        <div className="mt-0.5 flex items-center gap-2">
+          {item.user && (
+            <span className="text-xs text-muted-foreground truncate">
+              by {item.user.name}
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {timeAgo(item.created_at)}
+          </span>
+        </div>
+        {item.details && (
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{item.details}</p>
+        )}
+      </div>
+      <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+        {item.entity_type}
+      </span>
+    </div>
+  )
 }
 
 export function ActivityFeed() {
   const { data: historique, isLoading, error } = useHistorique()
 
-  const recentActivities = useMemo(() => {
-    const items = historique ?? []
-    return items
-      .slice()
-      .sort(
-        (a: Historique, b: Historique) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, 5)
-  }, [historique])
-
-  if (isLoading) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="text-sm text-muted-foreground">Loading recent activity...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="text-sm text-destructive">Failed to load recent activity.</div>
-      </div>
-    )
-  }
-
-  if (recentActivities.length === 0) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <div className="text-sm text-muted-foreground">No recent activity.</div>
-      </div>
-    )
-  }
+  // Most recent 10 entries
+  const recent = historique
+    ? [...historique]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 10)
+    : []
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
-      <div className="border-b border-border p-4">
-        <h3 className="font-semibold text-card-foreground">Recent Activity</h3>
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div>
+          <h3 className="font-semibold text-card-foreground">Recent Activity</h3>
+          <p className="text-xs text-muted-foreground">Latest actions across the system</p>
+        </div>
+        {historique && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {historique.length} total
+          </span>
+        )}
       </div>
-      <div className="divide-y divide-border">
-        {recentActivities.map((activity) => {
-          const { icon: Icon, iconColor } = getActivityIcon(activity.entity_type, activity.action)
 
-          return (
-            <div
-              key={activity.id}
-              className="flex items-start gap-4 p-4 transition-colors hover:bg-muted/50"
-            >
-              <div
-                className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                  iconColor
-                )}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <p className="font-medium text-card-foreground">
-                  {activity.action || "Activity"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {activity.details ?? `${activity.entity_type} #${activity.entity_id}`}
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatRelativeTime(activity.created_at)}
-              </span>
-            </div>
-          )
-        })}
+      <div className="px-6">
+        {isLoading && (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center gap-2 py-6 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            Failed to load activity
+          </div>
+        )}
+
+        {!isLoading && !error && recent.length === 0 && (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No activity recorded yet
+          </p>
+        )}
+
+        {recent.length > 0 && (
+          <div className="divide-y divide-border">
+            {recent.map((item) => (
+              <ActivityItem key={item.id} item={item} />
+            ))}
+          </div>
+        )}
       </div>
+
+      {recent.length > 0 && (
+        <div className="border-t border-border px-6 py-3">
+          <a
+            href="/dashboard/historique"
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            View all activity →
+          </a>
+        </div>
+      )}
     </div>
   )
 }

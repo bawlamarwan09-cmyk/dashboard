@@ -7,21 +7,17 @@ import {
   ProblemsByStatusChart,
   ProblemsByDeviceChart,
   RepairTrendChart,
+  getSentToCompaniesCount,
 } from "@/components/dashboard/dashboard-charts"
 import { useDashboardCharts, useDashboardStats } from "@/lib/hooks/use-api"
 
 export default function DashboardPage() {
-  const {
-    data: stats,
-    isLoading: statsLoading,
-    error: statsError,
-  } = useDashboardStats()
-  const {
-    data: chartData,
-    error: chartsError,
-  } = useDashboardCharts()
+  const { data: stats, isLoading, error } = useDashboardStats()
+  const { data: chartData, error: chartsError } = useDashboardCharts()
 
-  if (statsLoading) {
+  const sentToCompanies = getSentToCompaniesCount(stats)
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -29,7 +25,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (statsError) {
+  if (error) {
     return (
       <div className="rounded-lg bg-destructive/10 p-4 text-destructive">
         Failed to load dashboard data. Please try again.
@@ -46,6 +42,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {/* ── Stat cards ── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatsCard
           title="Total Materiels"
@@ -54,7 +51,7 @@ export default function DashboardPage() {
           iconColor="bg-primary/10 text-primary"
         />
         <StatsCard
-          title="Active Problemes"
+          title="Active Problems"
           value={stats?.activeProblemes ?? 0}
           icon={AlertCircle}
           iconColor="bg-destructive/10 text-destructive"
@@ -67,18 +64,19 @@ export default function DashboardPage() {
         />
         <StatsCard
           title="Sent to Companies"
-          value={stats?.resolvedThisMonth ?? 0}
+          value={sentToCompanies}
           icon={Truck}
           iconColor="bg-chart-5/10 text-chart-5"
         />
         <StatsCard
-          title="Resolved"
+          title="Resolved This Month"
           value={stats?.resolvedThisMonth ?? 0}
           icon={CheckCircle2}
           iconColor="bg-success/10 text-success"
         />
       </div>
 
+      {/* ── Charts ── */}
       <div className="grid gap-6 lg:grid-cols-3">
         <ProblemsByStatusChart stats={stats} />
         <ProblemsByDeviceChart stats={stats} />
@@ -87,29 +85,31 @@ export default function DashboardPage() {
 
       {chartsError && (
         <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-          Charts couldn&apos;t be loaded. The dashboard still shows summary data.
+          Charts couldn&apos;t be loaded. Summary data is still shown above.
         </div>
       )}
 
+      {/* ── Activity + Quick Actions ── */}
       <div className="grid gap-6 lg:grid-cols-2">
         <ActivityFeed />
+
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="mb-4 font-semibold text-card-foreground">Quick Actions</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <a
-              href="/dashboard/problems"
+              href="/dashboard/problemes"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
                 <AlertCircle className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-medium text-card-foreground">Report Probleme</p>
+                <p className="font-medium text-card-foreground">Report Problem</p>
                 <p className="text-sm text-muted-foreground">Submit a new issue</p>
               </div>
             </a>
             <a
-              href="/dashboard/devices"
+              href="/dashboard/materiels"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">

@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Monitor, Eye, EyeOff, Loader2, LogOut } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Monitor, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
-  const { login, logout, isLoading: authLoading } = useAuth()
+  const { login, user, isLoading: authLoading } = useAuth()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
@@ -20,22 +22,43 @@ export default function LoginPage() {
     rememberMe: false,
   })
   const [error, setError] = useState("")
+function getRedirectPath(role?: string) {
+  switch (role) {
+    case "ADMIN":
+      return "/dashboard/devices"        // 👈 change this
+    case "OPERATOR":
+      return "/dashboard" // 👈 change this
+    case "USER":
+      return "/dashboard/my-devices"    // 👈 change this
+    default:
+      return "/dashboard"
+  }
+}
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+  if (!authLoading && user) {
+    router.push(getRedirectPath(user.role))
+  }
+}, [user, authLoading, router])
+  // Show spinner while checking auth or if already logged in
+  if (authLoading || user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setIsLoading(true)
-
     try {
       await login(formData.email, formData.password)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password")
       setIsLoading(false)
     }
-  }
-
-  const handleLogout = () => {
-    logout()
   }
 
   return (
@@ -70,7 +93,7 @@ export default function LoginPage() {
                   placeholder="name@company.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  disabled={isLoading || authLoading}
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -78,10 +101,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs text-primary hover:underline"
-                  >
+                  <Link href="/forgot-password" className="text-xs text-primary hover:underline">
                     Forgot password?
                   </Link>
                 </div>
@@ -92,7 +112,7 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    disabled={isLoading || authLoading}
+                    disabled={isLoading}
                     required
                   />
                   <Button
@@ -101,16 +121,12 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading || authLoading}
+                    disabled={isLoading}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="sr-only">
-                      {showPassword ? "Hide password" : "Show password"}
-                    </span>
+                    {showPassword
+                      ? <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      : <Eye className="h-4 w-4 text-muted-foreground" />}
+                    <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
                   </Button>
                 </div>
               </div>
@@ -119,10 +135,8 @@ export default function LoginPage() {
                 <Checkbox
                   id="remember"
                   checked={formData.rememberMe}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, rememberMe: checked as boolean })
-                  }
-                  disabled={isLoading || authLoading}
+                  onCheckedChange={(checked) => setFormData({ ...formData, rememberMe: checked as boolean })}
+                  disabled={isLoading}
                 />
                 <Label htmlFor="remember" className="text-sm font-normal">
                   Remember me for 30 days
@@ -131,26 +145,10 @@ export default function LoginPage() {
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4">
-              <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  "Sign in"
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleLogout}
-                disabled={isLoading || authLoading}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</>
+                ) : "Sign in"}
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
@@ -165,13 +163,9 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-muted-foreground">
           By signing in, you agree to our{" "}
-          <Link href="#" className="underline hover:text-foreground">
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link href="#" className="underline hover:text-foreground">
-            Privacy Policy
-          </Link>
+          <Link href="#" className="underline hover:text-foreground">Terms of Service</Link>
+          {" "}and{" "}
+          <Link href="#" className="underline hover:text-foreground">Privacy Policy</Link>
         </p>
       </div>
     </div>
