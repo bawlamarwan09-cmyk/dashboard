@@ -42,6 +42,17 @@ model User {
   sentMessages      Message[]      @relation("SentMessages")
   receivedMessages  Message[]      @relation("ReceivedMessages")
   historiques       Historique[]
+  resetTokens PasswordResetToken[]
+}
+model PasswordResetToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  user_id    Int
+  used       Boolean  @default(false)
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model Materiel {
@@ -67,7 +78,6 @@ model Affectation {
   secteur      String
   centre       String
   date_debut   DateTime
-  date_fin     DateTime?
   materiel     Materiel  @relation(fields: [materiel_id], references: [id], onDelete: Restrict)
   user         User      @relation(fields: [user_id], references: [id], onDelete: Restrict)
 
