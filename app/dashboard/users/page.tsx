@@ -332,7 +332,7 @@ export default function UsersPage() {
             <div className="space-y-2">
               <Label>Email</Label>
               <Input type="email" placeholder="john.doe@company.com" value={newUser.email}
-                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>Password</Label>

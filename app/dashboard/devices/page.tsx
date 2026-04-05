@@ -498,7 +498,7 @@ export default function DevicesPage() {
                       <dd className="font-medium text-foreground">{selectedMaterielAffectation.centre}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Date Debut</dt>
+                      <dt className="text-muted-foreground">Date </dt>
                       <dd className="font-medium text-foreground">
                         {new Date(selectedMaterielAffectation.date_debut).toLocaleDateString()}
                       </dd>
@@ -595,8 +595,8 @@ export default function DevicesPage() {
               <Select value={assignUserId} onValueChange={setAssignUserId}>
                 <SelectTrigger><SelectValue placeholder="Select user" /></SelectTrigger>
                 <SelectContent>
-                  {(users || []).filter(u => u.role === "USER").map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>{u.name} — {u.email}</SelectItem>
+                  {(users || []).map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>{u.name} — {u.email} ({u.role})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

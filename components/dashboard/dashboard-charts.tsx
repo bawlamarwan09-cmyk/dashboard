@@ -16,19 +16,40 @@ import {
 
 import type { ChartData, DashboardStats, ProblemeStatus } from "@/lib/api"
 
-const STATUS_COLORS: Record<ProblemeStatus, string> = {
-  DECLARED:           "hsl(var(--destructive))",
-  UNDER_VERIFICATION: "hsl(var(--warning))",
-  SENT_TO_COMPANY:    "hsl(var(--chart-5))",
-  REPAIRED:           "hsl(var(--chart-2))",
-  REPLACED:           "hsl(var(--chart-3))",
-  CLOSED:             "hsl(var(--success))",
+// ─── Blue & Indigo palette ────────────────────────────────────────────────────
+
+const BLUE = {
+  50:  "#eff6ff",
+  100: "#dbeafe",
+  200: "#bfdbfe",
+  300: "#93c5fd",
+  400: "#60a5fa",
+  500: "#3b82f6",
+  600: "#2563eb",
+  700: "#1d4ed8",
+  800: "#1e40af",
+  900: "#1e3a8a",
 }
 
-const RESULT_COLORS = [
-  "hsl(var(--chart-2))", // REPAIRED → green-ish
-  "hsl(var(--chart-5))", // REPLACED → blue-ish
-]
+const INDIGO = {
+  300: "#a5b4fc",
+  400: "#818cf8",
+  500: "#6366f1",
+  600: "#4f46e5",
+  700: "#4338ca",
+  800: "#3730a3",
+}
+
+const STATUS_COLORS: Record<ProblemeStatus, string> = {
+  DECLARED:           BLUE[400],
+  UNDER_VERIFICATION: BLUE[500],
+  SENT_TO_COMPANY:    INDIGO[400],
+  REPAIRED:           BLUE[700],
+  REPLACED:           INDIGO[600],
+  CLOSED:             BLUE[900],
+}
+
+const RESULT_COLORS = [BLUE[500], INDIGO[500]]
 
 function statusLabel(status: ProblemeStatus): string {
   switch (status) {
@@ -42,7 +63,6 @@ function statusLabel(status: ProblemeStatus): string {
   }
 }
 
-// Shared tooltip style
 const tooltipStyle = {
   contentStyle: {
     backgroundColor: "hsl(var(--card))",
@@ -52,14 +72,11 @@ const tooltipStyle = {
   },
 }
 
-// Helper used by dashboard page for the "Sent to Companies" stat card
 export function getSentToCompaniesCount(stats?: DashboardStats): number {
   return (
     stats?.problemesByStatus?.find((item) => item.status === "SENT_TO_COMPANY")?.count ?? 0
   )
 }
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
 
 function EmptyChart({ label }: { label: string }) {
   return (
@@ -77,7 +94,7 @@ export function ProblemsByStatusChart({ stats }: { stats?: DashboardStats }) {
   const data = raw.map((d) => ({
     name: statusLabel(d.status),
     value: d.count,
-    color: STATUS_COLORS[d.status] ?? "hsl(var(--chart-1))",
+    color: STATUS_COLORS[d.status] ?? BLUE[500],
   }))
 
   return (
@@ -129,7 +146,6 @@ export function ProblemsByDeviceChart({ stats }: { stats?: DashboardStats }) {
     count: d.count,
   }))
 
-  // Dynamic height based on number of entries — min 64 to fill card nicely
   const barHeight = Math.max(64, data.length * 44)
 
   return (
@@ -164,7 +180,7 @@ export function ProblemsByDeviceChart({ stats }: { stats?: DashboardStats }) {
               <Bar
                 dataKey="count"
                 name="Devices"
-                fill="hsl(var(--primary))"
+                fill={BLUE[500]}
                 radius={[0, 4, 4, 0]}
               />
             </BarChart>
@@ -178,7 +194,6 @@ export function ProblemsByDeviceChart({ stats }: { stats?: DashboardStats }) {
 // ─── Problems per Month (Bar) ─────────────────────────────────────────────────
 
 export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
-  // Show monthly problem trend instead of the tiny interventionsByResult pie
   const monthly = chartData?.problemesByMonth ?? []
   const results = chartData?.interventionsByResult ?? []
 
@@ -211,7 +226,7 @@ export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
               <Bar
                 dataKey="count"
                 name="Problems"
-                fill="hsl(var(--chart-1))"
+                fill={INDIGO[500]}
                 radius={[4, 4, 0, 0]}
               />
             </BarChart>
@@ -219,7 +234,6 @@ export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
         </div>
       )}
 
-      {/* Repairs vs Replacements mini section below */}
       {hasResults && (
         <>
           <div className="my-4 border-t border-border" />
@@ -231,7 +245,7 @@ export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
                   data={results.map((d, i) => ({
                     name: d.result === "REPAIRED" ? "Repaired" : "Replaced",
                     value: d.count,
-                    color: RESULT_COLORS[i] ?? "hsl(var(--chart-1))",
+                    color: RESULT_COLORS[i] ?? BLUE[500],
                   }))}
                   cx="50%"
                   cy="50%"
@@ -243,7 +257,7 @@ export function RepairTrendChart({ chartData }: { chartData?: ChartData }) {
                   {results.map((_, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={RESULT_COLORS[index] ?? "hsl(var(--chart-1))"}
+                      fill={RESULT_COLORS[index] ?? BLUE[500]}
                     />
                   ))}
                 </Pie>

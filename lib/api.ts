@@ -181,7 +181,23 @@ export const authApi = {
 
   me: (token: string) =>
     apiFetch<User>("/auth/me", { token }),
-
+  forgotPassword: (email: string) =>
+    apiFetch<{ message: string }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+ 
+  verifyResetToken: (token: string) =>
+    apiFetch<{ message: string }>("/auth/verify-reset-token", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+ 
+  resetPassword: (token: string, password: string) =>
+    apiFetch<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
   logout: async (): Promise<boolean> => true,
 }
 

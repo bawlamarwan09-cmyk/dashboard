@@ -97,7 +97,7 @@ export default function DashboardPage() {
           <h3 className="mb-4 font-semibold text-card-foreground">Quick Actions</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <a
-              href="/dashboard/problemes"
+              href="/dashboard/problems"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
@@ -109,7 +109,7 @@ export default function DashboardPage() {
               </div>
             </a>
             <a
-              href="/dashboard/materiels"
+              href="/dashboard/devices"
               className="flex items-center gap-3 rounded-lg border border-border bg-background p-4 transition-colors hover:bg-muted"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">

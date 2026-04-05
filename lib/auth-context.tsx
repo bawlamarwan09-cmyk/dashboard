@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null
   token: string | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   register: (data: RegisterData) => Promise<void>
   logout: () => void
 }
@@ -21,39 +21,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-useEffect(() => {
-  const storedToken = localStorage.getItem("token")
-  console.log("stored token on mount:", storedToken)
+  useEffect(() => {
+    // localStorage = rememberMe (persists), sessionStorage = session only (clears on tab close)
+    const storedToken =
+      localStorage.getItem("token") || sessionStorage.getItem("token")
 
-  if (!storedToken) {
-    setIsLoading(false)
-    return
-  }
-
-  setToken(storedToken)
-
-  authApi
-    .me(storedToken)
-    .then((userData) => {
-      console.log("me response:", userData)
-      setUser(userData)
-    })
-    .catch((err) => {
-      console.error("me failed:", err)  // ← THIS will tell us the real error
-      localStorage.removeItem("token")
-      setToken(null)
-      setUser(null)
-    })
-    .finally(() => {
+    if (!storedToken) {
       setIsLoading(false)
-    })
-}, [])
+      return
+    }
 
-  const login = async (email: string, password: string) => {
+    setToken(storedToken)
+
+    authApi
+      .me(storedToken)
+      .then((userData) => {
+        setUser(userData)
+      })
+      .catch((err) => {
+        console.error("me failed:", err)
+        localStorage.removeItem("token")
+        sessionStorage.removeItem("token")
+        setToken(null)
+        setUser(null)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }, [])
+
+  const login = async (email: string, password: string, rememberMe = false) => {
     const response = await authApi.login(email, password)
-    localStorage.setItem("token", response.token)
-    console.log("login response:", response)
-  console.log("token:", response.token)     // add this
+
+    if (rememberMe) {
+      localStorage.setItem("token", response.token)
+      sessionStorage.removeItem("token")
+    } else {
+      sessionStorage.setItem("token", response.token)
+      localStorage.removeItem("token")
+    }
+
     setToken(response.token)
     setUser(response.user)
     router.push("/dashboard")
@@ -61,7 +68,7 @@ useEffect(() => {
 
   const register = async (data: RegisterData) => {
     const response = await authApi.register(data)
-    localStorage.setItem("token", response.token)
+    sessionStorage.setItem("token", response.token)
     setToken(response.token)
     setUser(response.user)
     router.push("/dashboard")
@@ -69,6 +76,7 @@ useEffect(() => {
 
   const logout = () => {
     localStorage.removeItem("token")
+    sessionStorage.removeItem("token")
     setToken(null)
     setUser(null)
     router.push("/login")
@@ -83,10 +91,8 @@ useEffect(() => {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
-
   return context
 }

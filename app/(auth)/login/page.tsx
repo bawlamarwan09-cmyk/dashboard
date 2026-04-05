@@ -25,11 +25,11 @@ export default function LoginPage() {
 function getRedirectPath(role?: string) {
   switch (role) {
     case "ADMIN":
-      return "/dashboard/devices"        // 👈 change this
+      return "/dashboard/devices"        
     case "OPERATOR":
-      return "/dashboard" // 👈 change this
+      return "/dashboard"
     case "USER":
-      return "/dashboard/my-devices"    // 👈 change this
+      return "/dashboard/my-devices"   
     default:
       return "/dashboard"
   }
@@ -54,7 +54,7 @@ function getRedirectPath(role?: string) {
     setError("")
     setIsLoading(true)
     try {
-      await login(formData.email, formData.password)
+      await login(formData.email, formData.password, formData.rememberMe)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password")
       setIsLoading(false)

@@ -475,7 +475,7 @@ const { data: users } = useUsers()
           </div>
 
           {/* Operator Actions */}
-       {/* Operator Actions */}
+    
 <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
   <h3 className="flex items-center gap-2 font-semibold text-card-foreground">
     <Wrench className="h-5 w-5" />
@@ -500,17 +500,42 @@ const { data: users } = useUsers()
         <SelectTrigger>
           <SelectValue placeholder="Select status" />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="UNDER_VERIFICATION">Under Verification</SelectItem>
-          <SelectItem value="SENT_TO_COMPANY">Sent to Company</SelectItem>
-          <SelectItem value="REPAIRED">Repaired</SelectItem>
-          <SelectItem value="REPLACED">Replaced</SelectItem>
-          <SelectItem value="CLOSED">Closed</SelectItem>
-        </SelectContent>
+       <SelectContent>
+  {/* ADMIN only: can assign to verification */}
+  {user?.role === "ADMIN" && (
+    <SelectItem value="UNDER_VERIFICATION" disabled={probleme.status !== "DECLARED"}>
+      Under Verification
+    </SelectItem>
+  )}
+
+  {/* ADMIN and OPERATOR: can send to company */}
+  {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
+    <SelectItem value="SENT_TO_COMPANY" disabled={probleme.status !== "UNDER_VERIFICATION"}>
+      Sent to Company
+    </SelectItem>
+  )}
+
+  {/* ADMIN only: can mark repaired/replaced/closed */}
+  {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
+    <>
+      <SelectItem
+        value="REPAIRED"
+        disabled={!["UNDER_VERIFICATION", "SENT_TO_COMPANY"].includes(probleme.status)}
+      >
+        Repaired
+      </SelectItem>
+      <SelectItem value="REPLACED" disabled={probleme.status !== "SENT_TO_COMPANY"}>
+        Replaced
+      </SelectItem>
+      <SelectItem value="CLOSED" disabled={!["REPAIRED", "REPLACED"].includes(probleme.status)}>
+        Closed
+      </SelectItem>
+    </>
+  )}
+</SelectContent>
       </Select>
     </div>
-
-    {newStatus === "UNDER_VERIFICATION" && (
+ {user?.role === "ADMIN" && newStatus === "UNDER_VERIFICATION" && (
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">
           Assign Operator <span className="text-destructive">*</span>
@@ -528,7 +553,7 @@ const { data: users } = useUsers()
       </div>
     )}
 
-    {newStatus === "SENT_TO_COMPANY" && (
+    {newStatus === "SENT_TO_COMPANY" && (user?.role === "ADMIN" || user?.role === "OPERATOR") && (
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">
           Assign Company <span className="text-destructive">*</span>
@@ -570,6 +595,7 @@ const { data: users } = useUsers()
     </Button>
   </div>
 </div>
+     
 
         </div>
       </div>
