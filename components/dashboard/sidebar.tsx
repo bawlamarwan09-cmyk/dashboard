@@ -31,14 +31,10 @@ const navByRole: Record<Role, { name: string; href: string; icon: any }[]> = {
     { name: "Problems",       href: "/dashboard/problems",       icon: AlertCircle },
     { name: "Interventions",  href: "/dashboard/interventions",  icon: Wrench },
     { name: "Messages",       href: "/dashboard/messages",       icon: MessageSquare },
+    { name: "My Devices",     href: "/dashboard/my-devices",   icon: Laptop },
 
   ],
-  COMPANY: [
-    { name: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
-    { name: "Problems",       href: "/dashboard/problems",       icon: AlertCircle },
-    { name: "Interventions",  href: "/dashboard/interventions",  icon: Wrench },
-    { name: "Messages",       href: "/dashboard/messages",       icon: MessageSquare },
-  ],
+  
   ADMIN: [
     { name: "Dashboard",      href: "/dashboard",               icon: LayoutDashboard },
     { name: "Devices",        href: "/dashboard/devices",        icon: Monitor },

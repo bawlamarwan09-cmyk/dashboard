@@ -40,9 +40,11 @@ export async function apiFetch<T>(
   return result as T
 }
 
-// ─── Enums (mirror Prisma enums) ─────────────────────────────────────────────
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
-export type Role = "USER" | "OPERATOR" | "COMPANY" | "ADMIN"
+// COMPANY removed — companies are not user accounts,
+// they are just a name/destination stored on Intervention
+export type Role = "USER" | "OPERATOR" | "ADMIN"
 
 export type ProblemeStatus =
   | "DECLARED"
@@ -54,7 +56,7 @@ export type ProblemeStatus =
 
 export type InterventionResult = "REPAIRED" | "REPLACED"
 
-// ─── Models (mirror Prisma models) ───────────────────────────────────────────
+// ─── Models ───────────────────────────────────────────────────────────────────
 
 export interface User {
   id: number
@@ -84,6 +86,7 @@ export interface Affectation {
   secteur: string
   centre: string
   date_debut: string
+  // date_fin removed — unassign = delete the affectation
   materiel?: Materiel
   user?: User
 }
@@ -106,7 +109,8 @@ export interface Intervention {
   id: number
   probleme_id: number
   operator_id: number
-  company_id?: number | null
+  // company_id removed — replaced with plain company name string
+  company_name?: string | null
   repare_par_admin: boolean
   diagnostic?: string | null
   date_envoi_entreprise?: string | null
@@ -118,7 +122,6 @@ export interface Intervention {
   date_retour_final?: string | null
   probleme?: Probleme
   operator?: User
-  company?: User | null
   remplacements?: Remplacement[]
 }
 
@@ -181,24 +184,26 @@ export const authApi = {
 
   me: (token: string) =>
     apiFetch<User>("/auth/me", { token }),
+
+  logout: async (): Promise<boolean> => true,
+
   forgotPassword: (email: string) =>
     apiFetch<{ message: string }>("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
- 
+
   verifyResetToken: (token: string) =>
     apiFetch<{ message: string }>("/auth/verify-reset-token", {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
- 
+
   resetPassword: (token: string, password: string) =>
     apiFetch<{ message: string }>("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ token, password }),
     }),
-  logout: async (): Promise<boolean> => true,
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -282,9 +287,20 @@ export const affectationsApi = {
     apiFetch<Affectation[]>(`/affectations/user/${userId}`, { token }),
 
   /**
-   * Assign a device to a user.
-   * Backend handles assignment history and closes any current open affectation.
+   * A materiel is available if it has NO affectation at all.
+   * materiel_id is @unique in DB so there can only be 0 or 1.
    */
+  isMaterielAvailable: async (
+    materielId: number,
+    token: string
+  ): Promise<boolean> => {
+    const affectations = await apiFetch<Affectation[]>(
+      `/affectations/materiel/${materielId}`,
+      { token }
+    )
+    return affectations.length === 0
+  },
+
   create: (
     data: Omit<Affectation, "id" | "materiel" | "user">,
     token: string
@@ -295,10 +311,6 @@ export const affectationsApi = {
       token,
     }),
 
-  /**
-   * Update assignment details (entite, agence, secteur, centre).
-   * Does NOT change materiel_id or user_id — delete + recreate for that.
-   */
   update: (
     id: number,
     data: Partial<Pick<Affectation, "entite" | "agence" | "secteur" | "centre">>,
@@ -310,14 +322,9 @@ export const affectationsApi = {
       token,
     }),
 
-  /**
-   * Unassign a device — simply deletes the affectation.
-   * The device becomes available for reassignment immediately.
-   */
   unassign: (id: number, token: string) =>
     apiFetch<void>(`/affectations/${id}`, { method: "DELETE", token }),
 
-  // Kept as alias for consistency with REST conventions
   delete: (id: number, token: string) =>
     apiFetch<void>(`/affectations/${id}`, { method: "DELETE", token }),
 }
@@ -365,7 +372,8 @@ export const interventionsApi = {
     data: {
       probleme_id: number
       operator_id: number
-      company_id?: number
+      // company_name replaces company_id — just a plain string
+      company_name?: string
       diagnostic?: string
     },
     token: string
@@ -381,7 +389,7 @@ export const interventionsApi = {
     data: Partial<
       Pick<
         Intervention,
-        | "company_id"
+        | "company_name"
         | "repare_par_admin"
         | "diagnostic"
         | "date_envoi_entreprise"

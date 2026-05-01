@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Select,
@@ -28,7 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { cn } from "@/lib/utils"
 import { useAffectationsByUser, useProbleme, useUsers } from "@/lib/hooks/use-api"
 import { problemesApi, messagesApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
@@ -80,34 +80,28 @@ export default function ProblemeDetailPage() {
   const parsedId = id ? parseInt(id) : undefined
   const { data: probleme, isLoading, error } = useProbleme(parsedId)
 
-  const [newMessage, setNewMessage] = useState("")
-  const [isSending, setIsSending] = useState(false)
-  const [newStatus, setNewStatus] = useState<ProblemeStatus | "">("")
+  const [newMessage, setNewMessage]           = useState("")
+  const [isSending, setIsSending]             = useState(false)
+  const [newStatus, setNewStatus]             = useState<ProblemeStatus | "">("")
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
-  const [diagnostic, setDiagnostic] = useState("")
-const [operatorId, setOperatorId] = useState("")
-const [companyId, setCompanyId] = useState("")
-const [statusError, setStatusError] = useState<string | null>(null)
-const { data: users } = useUsers()
-  const { data: reporterAffectations } = useAffectationsByUser(
-    probleme?.declared_by_user_id
-  )
+  const [diagnostic, setDiagnostic]           = useState("")
+  const [operatorId, setOperatorId]           = useState("")
+  const [companyName, setCompanyName]         = useState("") // ← plain string now
+  const [statusError, setStatusError]         = useState<string | null>(null)
+
+  const { data: users } = useUsers()
+  const { data: reporterAffectations } = useAffectationsByUser(probleme?.declared_by_user_id)
   const reporterCurrentAffectation = reporterAffectations?.[0]
 
-  // Set mounted flag on client side
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
+  useEffect(() => { setIsMounted(true) }, [])
 
-  // Debug logging
   useEffect(() => {
     if (!isLoading && isMounted) {
       console.log("ProblemeDetailPage Debug:", {
-        id,
-        parsedId,
+        id, parsedId,
         token: token ? "present" : "missing",
         probleme: probleme ? "loaded" : "not loaded",
-        error: error ? error : "no error",
+        error: error ?? "no error",
         isLoading,
       })
     }
@@ -115,7 +109,6 @@ const { data: users } = useUsers()
 
   const handleSendMessage = async () => {
     if (!token || !probleme || !newMessage.trim()) return
-    // Need a receiver — send to declaredBy if current user is not them, else to operator
     const receiverId =
       user?.id !== probleme.declared_by_user_id
         ? probleme.declared_by_user_id
@@ -137,53 +130,53 @@ const { data: users } = useUsers()
   }
 
   const handleUpdateStatus = async () => {
-  if (!token || !probleme || !newStatus) return
-  setStatusError(null)
+    if (!token || !probleme || !newStatus) return
+    setStatusError(null)
 
-  if (newStatus === "UNDER_VERIFICATION" && !operatorId) {
-    setStatusError("Please select an operator.")
-    return
-  }
-  if (newStatus === "SENT_TO_COMPANY" && !companyId) {
-    setStatusError("Please select a company.")
-    return
-  }
+    if (newStatus === "UNDER_VERIFICATION" && !operatorId) {
+      setStatusError("Please select an operator.")
+      return
+    }
+    if (newStatus === "SENT_TO_COMPANY" && !companyName.trim()) {
+      setStatusError("Please enter the company name.")
+      return
+    }
 
-  setIsUpdatingStatus(true)
-  try {
-    const res = await fetch(
-      `http://localhost:5000/api/v1/problemes/${probleme.id}/status`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: newStatus,
-          ...(operatorId && { operator_id: parseInt(operatorId) }),
-          ...(companyId && { company_id: parseInt(companyId) }),
-          ...(diagnostic && { diagnostic }),
-        }),
-      }
-    )
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message)
+    setIsUpdatingStatus(true)
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1"}/problemes/${probleme.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            ...(operatorId   && { operator_id: parseInt(operatorId) }),
+            ...(companyName.trim() && { company_name: companyName.trim() }), // ← string not ID
+            ...(diagnostic   && { diagnostic }),
+          }),
+        }
+      )
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message)
 
-    mutate(["probleme", probleme.id, token])
-    mutate(["problemes", token])
-    mutate(["interventions", token])
-    setNewStatus("")
-    setOperatorId("")
-    setCompanyId("")
-    setDiagnostic("")
-  } catch (err: any) {
-    setStatusError(err.message || "Failed to update status")
-  } finally {
-    setIsUpdatingStatus(false)
+      mutate(["probleme", probleme.id, token])
+      mutate(["problemes", token])
+      mutate(["interventions", token])
+      mutate(["materiels", token]) // refresh devices list (old device may be deleted on REPLACED)
+      setNewStatus("")
+      setOperatorId("")
+      setCompanyName("")
+      setDiagnostic("")
+    } catch (err: any) {
+      setStatusError(err.message || "Failed to update status")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
   }
-  
-}
 
   if (isLoading) {
     return (
@@ -193,15 +186,11 @@ const { data: users } = useUsers()
     )
   }
 
-  // Detailed error handling
   const getErrorMessage = () => {
     if (!id) return "Problem ID is missing from URL"
     if (isNaN(parsedId || NaN)) return `Invalid problem ID: "${id}"`
     if (!token) return "You are not authenticated. Please log in."
-    if (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error)
-      return `Failed to load problem: ${errorMsg}`
-    }
+    if (error) return `Failed to load problem: ${error instanceof Error ? error.message : String(error)}`
     if (!probleme) return "Problem not found in database"
     return "Unknown error"
   }
@@ -212,11 +201,9 @@ const { data: users } = useUsers()
         <div className="rounded-lg bg-destructive/10 p-4 text-destructive border border-destructive/20">
           <h3 className="font-semibold mb-2">Failed to Load Problem</h3>
           <p className="text-sm mb-3">{getErrorMessage()}</p>
-          <div className="text-xs space-y-1">
-            <p>Debug info: ID="{id}", Token={token ? "✓" : "✗"}</p>
-          </div>
+          <p className="text-xs">Debug info: ID="{id}", Token={token ? "✓" : "✗"}</p>
         </div>
-        <Link href="/dashboard/problems">
+        <Link href="/dashboard/problemes">
           <Button variant="outline">← Back to Problems</Button>
         </Link>
       </div>
@@ -278,6 +265,13 @@ const { data: users } = useUsers()
                       <p className="text-sm text-muted-foreground">
                         <span className="font-medium text-foreground">Operator: </span>
                         {intervention.operator.name}
+                      </p>
+                    )}
+                    {/* company_name — plain string */}
+                    {intervention.company_name && (
+                      <p className="text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">Company: </span>
+                        {intervention.company_name}
                       </p>
                     )}
                     {intervention.date_intervention && (
@@ -356,30 +350,19 @@ const { data: users } = useUsers()
               Matériel Information
             </h3>
             <dl className="mt-4 space-y-3">
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">Type</dt>
-                <dd className="text-sm font-medium text-foreground">{probleme.materiel?.type ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">Marque</dt>
-                <dd className="text-sm font-medium text-foreground">{probleme.materiel?.marque ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">Modèle</dt>
-                <dd className="text-sm font-medium text-foreground">{probleme.materiel?.modele ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">N° Inventaire</dt>
-                <dd className="font-mono text-sm text-foreground">{probleme.materiel?.numero_inventaire ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">N° Série</dt>
-                <dd className="font-mono text-sm text-foreground">{probleme.materiel?.numero_serie ?? "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-muted-foreground">Code ONEE</dt>
-                <dd className="font-mono text-sm text-foreground">{probleme.materiel?.code_onee ?? "—"}</dd>
-              </div>
+              {[
+                ["Type",          probleme.materiel?.type],
+                ["Marque",        probleme.materiel?.marque],
+                ["Modèle",        probleme.materiel?.modele],
+                ["N° Inventaire", probleme.materiel?.numero_inventaire],
+                ["N° Série",      probleme.materiel?.numero_serie],
+                ["Code ONEE",     probleme.materiel?.code_onee],
+              ].map(([label, value]) => (
+                <div key={label} className="flex justify-between">
+                  <dt className="text-sm text-muted-foreground">{label}</dt>
+                  <dd className="font-mono text-sm text-foreground">{value ?? "—"}</dd>
+                </div>
+              ))}
             </dl>
           </div>
 
@@ -413,48 +396,20 @@ const { data: users } = useUsers()
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-foreground">Reporter Full Info</p>
                     <dl className="space-y-2 text-sm">
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Name</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Email</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {probleme.declaredBy?.email ?? "—"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Role</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {probleme.declaredBy?.role ?? "USER"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Entite</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {reporterCurrentAffectation?.entite ?? "—"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Agence</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {reporterCurrentAffectation?.agence ?? "—"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Secteur</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {reporterCurrentAffectation?.secteur ?? "—"}
-                        </dd>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <dt className="text-muted-foreground">Centre</dt>
-                        <dd className="font-medium text-foreground text-right">
-                          {reporterCurrentAffectation?.centre ?? "—"}
-                        </dd>
-                      </div>
+                      {[
+                        ["Name",    probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`],
+                        ["Email",   probleme.declaredBy?.email],
+                        ["Role",    probleme.declaredBy?.role ?? "USER"],
+                        ["Entite",  reporterCurrentAffectation?.entite],
+                        ["Agence",  reporterCurrentAffectation?.agence],
+                        ["Secteur", reporterCurrentAffectation?.secteur],
+                        ["Centre",  reporterCurrentAffectation?.centre],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">{label}</dt>
+                          <dd className="font-medium text-foreground text-right">{value ?? "—"}</dd>
+                        </div>
+                      ))}
                     </dl>
                   </div>
                 </HoverCardContent>
@@ -467,135 +422,135 @@ const { data: users } = useUsers()
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium text-foreground">{probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}</p>
+                  <p className="font-medium text-foreground">
+                    {probleme.declaredBy?.name ?? `User #${probleme.declared_by_user_id}`}
+                  </p>
                   <p className="text-sm text-muted-foreground">{probleme.declaredBy?.email ?? "—"}</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Operator Actions */}
-    
-<div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-  <h3 className="flex items-center gap-2 font-semibold text-card-foreground">
-    <Wrench className="h-5 w-5" />
-    Update Status
-  </h3>
-  <div className="mt-4 space-y-4">
+          {/* Update Status */}
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="flex items-center gap-2 font-semibold text-card-foreground">
+              <Wrench className="h-5 w-5" />
+              Update Status
+            </h3>
+            <div className="mt-4 space-y-4">
 
-    {statusError && (
-      <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-        {statusError}
-      </div>
-    )}
+              {statusError && (
+                <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                  {statusError}
+                </div>
+              )}
 
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-foreground">New Status</label>
-      <Select value={newStatus} onValueChange={(v) => {
-        setNewStatus(v as ProblemeStatus)
-        setStatusError(null)
-        setOperatorId("")
-        setCompanyId("")
-      }}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select status" />
-        </SelectTrigger>
-       <SelectContent>
-  {/* ADMIN only: can assign to verification */}
-  {user?.role === "ADMIN" && (
-    <SelectItem value="UNDER_VERIFICATION" disabled={probleme.status !== "DECLARED"}>
-      Under Verification
-    </SelectItem>
-  )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">New Status</label>
+                <Select
+                  value={newStatus}
+                  onValueChange={(v) => {
+                    setNewStatus(v as ProblemeStatus)
+                    setStatusError(null)
+                    setOperatorId("")
+                    setCompanyName("")
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {user?.role === "ADMIN" && (
+                      <SelectItem value="UNDER_VERIFICATION" disabled={probleme.status !== "DECLARED"}>
+                        Under Verification
+                      </SelectItem>
+                    )}
+                    {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
+                      <SelectItem value="SENT_TO_COMPANY" disabled={probleme.status !== "UNDER_VERIFICATION"}>
+                        Sent to Company
+                      </SelectItem>
+                    )}
+                    {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
+                      <>
+                        <SelectItem
+                          value="REPAIRED"
+                          disabled={!["UNDER_VERIFICATION", "SENT_TO_COMPANY"].includes(probleme.status)}
+                        >
+                          Repaired
+                        </SelectItem>
+                        <SelectItem value="REPLACED" disabled={probleme.status !== "SENT_TO_COMPANY"}>
+                          Replaced
+                        </SelectItem>
+                        <SelectItem value="CLOSED" disabled={!["REPAIRED", "REPLACED"].includes(probleme.status)}>
+                          Closed
+                        </SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-  {/* ADMIN and OPERATOR: can send to company */}
-  {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
-    <SelectItem value="SENT_TO_COMPANY" disabled={probleme.status !== "UNDER_VERIFICATION"}>
-      Sent to Company
-    </SelectItem>
-  )}
+              {/* Assign Operator — ADMIN only, UNDER_VERIFICATION */}
+              {user?.role === "ADMIN" && newStatus === "UNDER_VERIFICATION" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Assign Operator <span className="text-destructive">*</span>
+                  </label>
+                  <Select value={operatorId} onValueChange={setOperatorId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select operator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(users || []).filter((u) => u.role === "OPERATOR").map((o) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-  {/* ADMIN only: can mark repaired/replaced/closed */}
-  {(user?.role === "ADMIN" || user?.role === "OPERATOR") && (
-    <>
-      <SelectItem
-        value="REPAIRED"
-        disabled={!["UNDER_VERIFICATION", "SENT_TO_COMPANY"].includes(probleme.status)}
-      >
-        Repaired
-      </SelectItem>
-      <SelectItem value="REPLACED" disabled={probleme.status !== "SENT_TO_COMPANY"}>
-        Replaced
-      </SelectItem>
-      <SelectItem value="CLOSED" disabled={!["REPAIRED", "REPLACED"].includes(probleme.status)}>
-        Closed
-      </SelectItem>
-    </>
-  )}
-</SelectContent>
-      </Select>
-    </div>
- {user?.role === "ADMIN" && newStatus === "UNDER_VERIFICATION" && (
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          Assign Operator <span className="text-destructive">*</span>
-        </label>
-        <Select value={operatorId} onValueChange={setOperatorId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select operator" />
-          </SelectTrigger>
-          <SelectContent>
-            {(users || []).filter(u => u.role === "OPERATOR").map((o) => (
-              <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    )}
+              {/* Company Name — plain text input, SENT_TO_COMPANY */}
+              {newStatus === "SENT_TO_COMPANY" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Company Name <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    placeholder="e.g. Tech Solutions SARL"
+                    value={companyName}
+                    onChange={(e) => {
+                      setCompanyName(e.target.value)
+                      setStatusError(null)
+                    }}
+                  />
+                </div>
+              )}
 
-    {newStatus === "SENT_TO_COMPANY" && (user?.role === "ADMIN" || user?.role === "OPERATOR") && (
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          Assign Company <span className="text-destructive">*</span>
-        </label>
-        <Select value={companyId} onValueChange={setCompanyId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select company" />
-          </SelectTrigger>
-          <SelectContent>
-            {(users || []).filter(u => u.role === "COMPANY").map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    )}
+              {/* Diagnostic notes */}
+              {newStatus && newStatus !== "CLOSED" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Diagnostic / Notes</label>
+                  <Textarea
+                    placeholder="Enter diagnostic notes..."
+                    value={diagnostic}
+                    onChange={(e) => setDiagnostic(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                </div>
+              )}
 
-    {newStatus && newStatus !== "CLOSED" && (
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">Diagnostic / Notes</label>
-        <Textarea
-          placeholder="Enter diagnostic notes..."
-          value={diagnostic}
-          onChange={(e) => setDiagnostic(e.target.value)}
-          className="min-h-[80px]"
-        />
-      </div>
-    )}
-
-    <Button
-      className="w-full"
-      onClick={handleUpdateStatus}
-      disabled={!newStatus || isUpdatingStatus}
-    >
-      {isUpdatingStatus
-        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        : <CheckCircle2 className="mr-2 h-4 w-4" />}
-      Update Status
-    </Button>
-  </div>
-</div>
-     
+              <Button
+                className="w-full"
+                onClick={handleUpdateStatus}
+                disabled={!newStatus || isUpdatingStatus}
+              >
+                {isUpdatingStatus
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                Update Status
+              </Button>
+            </div>
+          </div>
 
         </div>
       </div>

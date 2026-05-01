@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Wrench,
   Truck,
@@ -14,7 +14,11 @@ import {
   RefreshCw,
   ArrowRightLeft,
   Loader2,
+  FileDown,
+  DatabaseBackup,
 } from "lucide-react"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -41,9 +45,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useInterventions } from "@/lib/hooks/use-api"
+import { useAuth } from "@/lib/auth-context"
+import { interventionsApi } from "@/lib/api"
 import type { Intervention, InterventionResult } from "@/lib/api"
+import { toast } from "sonner"
+import { mutate } from "swr"
 
 const getResultBadge = (result?: InterventionResult | null) => {
   if (!result) return <span className="text-muted-foreground">Pending</span>
@@ -57,10 +73,11 @@ const getResultBadge = (result?: InterventionResult | null) => {
   }
 }
 
+// company_name is now a plain string — no more company object
 const getTypeBadge = (intervention: Intervention) => {
   if (intervention.remplacements && intervention.remplacements.length > 0)
     return <Badge variant="outline" className="border-warning/50 text-warning">Replacement</Badge>
-  if (intervention.company_id)
+  if (intervention.company_name)
     return <Badge variant="outline" className="border-primary/50 text-primary">External Service</Badge>
   if (intervention.repare_par_admin)
     return <Badge variant="outline">Admin Repair</Badge>
@@ -79,14 +96,85 @@ const getStatusBadge = (intervention: Intervention) => {
 
 const getTypeKey = (intervention: Intervention) => {
   if (intervention.remplacements && intervention.remplacements.length > 0) return "replacements"
-  if (intervention.company_id) return "external"
+  if (intervention.company_name) return "external"
   return "internal"
 }
 
 export default function InterventionsPage() {
   const { data: interventions, isLoading, error } = useInterventions()
-  const [searchQuery, setSearchQuery] = useState("")
+  const { token } = useAuth()
+  const [searchQuery, setSearchQuery]   = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [typeFilter, setTypeFilter]     = useState("all")
+  const [replacingId, setReplacingId]   = useState<number | null>(null)
+  const [lastBackup, setLastBackup]     = useState<Date | null>(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem("interventions_last_backup")
+    if (stored) setLastBackup(new Date(stored))
+  }, [])
+
+  const backupOverdue = !lastBackup || (Date.now() - lastBackup.getTime() > 7 * 24 * 60 * 60 * 1000)
+
+  const handleBackup = (format: "json" | "csv") => {
+    const now = new Date()
+    const date = now.toISOString().slice(0, 10)
+    let blob: Blob
+    let filename: string
+
+    if (format === "json") {
+      const payload = {
+        exported_at: now.toISOString(),
+        total: interventionList.length,
+        interventions: interventionList,
+      }
+      blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+      filename = `interventions-backup-${date}.json`
+    } else {
+      const headers = ["ID","Probleme ID","Materiel","Type","Status","Operator","Company","Date Envoi","Date Retour","Result"]
+      const rows = interventionList.map((i) => [
+        i.id,
+        i.probleme_id,
+        i.probleme?.materiel ? `${i.probleme.materiel.marque} ${i.probleme.materiel.modele}` : `#${i.probleme?.materiel_id ?? "-"}`,
+        getTypeLabel(i),
+        getStatusLabel(i),
+        i.operator?.name ?? `#${i.operator_id}`,
+        i.company_name ?? "-",
+        i.date_envoi_entreprise ? new Date(i.date_envoi_entreprise).toLocaleDateString() : "-",
+        i.date_retour_final     ? new Date(i.date_retour_final).toLocaleDateString()     : "-",
+        i.resultat ?? "Pending",
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      const csv = [headers.join(","), ...rows].join("\n")
+      blob = new Blob([csv], { type: "text/csv" })
+      filename = `interventions-backup-${date}.csv`
+    }
+
+    const url = URL.createObjectURL(blob)
+    const a   = document.createElement("a")
+    a.href    = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+    localStorage.setItem("interventions_last_backup", now.toISOString())
+    setLastBackup(now)
+    toast.success(`Backup saved as ${format.toUpperCase()} — ${interventionList.length} interventions exported`)
+  }
+
+  const handleMarkReplaced = async (intervention: Intervention) => {
+    if (!token) return
+    try {
+      setReplacingId(intervention.id)
+      await interventionsApi.update(intervention.id, { resultat: "REPLACED" }, token)
+      // Revalidate interventions + materiels (old device may be gone)
+      mutate(["interventions", token])
+      mutate(["materiels", token])
+      toast.success("Device marked as replaced")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to mark as replaced")
+    } finally {
+      setReplacingId(null)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -108,20 +196,18 @@ export default function InterventionsPage() {
 
   const filterList = (list: Intervention[]) =>
     list.filter((i) => {
-      const materielName = i.probleme?.materiel
-        ? `${i.probleme.materiel.marque} ${i.probleme.materiel.modele}`
-        : ""
-      const operatorName = i.operator?.name ?? ""
-      const companyName = i.company?.name ?? ""
+      const materielName  = i.probleme?.materiel ? `${i.probleme.materiel.marque} ${i.probleme.materiel.modele}` : ""
+      const operatorName  = i.operator?.name ?? ""
+      const companyName   = i.company_name ?? ""   // plain string now
       const matchesSearch =
         String(i.id).includes(searchQuery) ||
         materielName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         operatorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         companyName.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesStatus = statusFilter === "all" || (() => {
-        if (statusFilter === "completed") return !!i.resultat
-        if (statusFilter === "returned") return !!i.date_retour_drr && !i.resultat
-        if (statusFilter === "shipped") return !!i.date_envoi_entreprise && !i.date_retour_drr
+        if (statusFilter === "completed")  return !!i.resultat
+        if (statusFilter === "returned")   return !!i.date_retour_drr && !i.resultat
+        if (statusFilter === "shipped")    return !!i.date_envoi_entreprise && !i.date_retour_drr
         if (statusFilter === "in_progress") return !i.date_envoi_entreprise && !i.resultat
         return true
       })()
@@ -170,126 +256,157 @@ export default function InterventionsPage() {
                     {intervention.operator?.name ?? `#${intervention.operator_id}`}
                   </div>
                 </TableCell>
+
+                {/* Company — now a plain string */}
                 <TableCell className="hidden sm:table-cell">
-                  {intervention.company ? (
+                  {intervention.company_name ? (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Building2 className="h-4 w-4" />
-                      <span className="max-w-[120px] truncate">{intervention.company.name}</span>
+                      <span className="max-w-[120px] truncate">{intervention.company_name}</span>
                     </div>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
                 </TableCell>
+
                 <TableCell className="hidden xl:table-cell">
                   {getResultBadge(intervention.resultat)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm">View Details</Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                      <DialogHeader>
-                        <DialogTitle>Intervention #{intervention.id}</DialogTitle>
-                        <DialogDescription>
-                          Problème #{intervention.probleme_id}
-                          {intervention.probleme?.materiel &&
-                            ` — ${intervention.probleme.materiel.marque} ${intervention.probleme.materiel.modele}`}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Status</p>
-                            {getStatusBadge(intervention)}
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Type</p>
-                            {getTypeBadge(intervention)}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Operator</p>
-                            <p className="font-medium text-foreground">
-                              {intervention.operator?.name ?? `#${intervention.operator_id}`}
-                            </p>
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Company</p>
-                            <p className="font-medium text-foreground">
-                              {intervention.company?.name ?? "—"}
-                            </p>
-                          </div>
-                        </div>
-                        {intervention.diagnostic && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Diagnostic</p>
-                            <p className="text-foreground">{intervention.diagnostic}</p>
-                          </div>
+                  <div className="flex items-center justify-end gap-2">
+                    {!intervention.resultat && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-warning/50 text-warning hover:bg-warning/10"
+                        onClick={() => handleMarkReplaced(intervention)}
+                        disabled={replacingId === intervention.id}
+                      >
+                        {replacingId === intervention.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <><RefreshCw className="mr-1 h-3 w-3" />Mark Replaced</>
                         )}
-                        {intervention.reference_envoi && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Shipment Reference</p>
-                            <p className="font-mono text-foreground">{intervention.reference_envoi}</p>
+                      </Button>
+                    )}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm">View Details</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                          <DialogTitle>Intervention #{intervention.id}</DialogTitle>
+                          <DialogDescription>
+                            Problème #{intervention.probleme_id}
+                            {intervention.probleme?.materiel &&
+                              ` — ${intervention.probleme.materiel.marque} ${intervention.probleme.materiel.modele}`}
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Status</p>
+                              {getStatusBadge(intervention)}
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Type</p>
+                              {getTypeBadge(intervention)}
+                            </div>
                           </div>
-                        )}
-                        {intervention.reference_retour && (
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Return Reference</p>
-                            <p className="font-mono text-foreground">{intervention.reference_retour}</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Operator</p>
+                              <p className="font-medium text-foreground">
+                                {intervention.operator?.name ?? `#${intervention.operator_id}`}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Company</p>
+                              <p className="font-medium text-foreground">
+                                {intervention.company_name ?? "—"}
+                              </p>
+                            </div>
                           </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Date Envoi</p>
-                            <p className="flex items-center gap-1 text-foreground text-sm">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              {intervention.date_envoi_entreprise
-                                ? new Date(intervention.date_envoi_entreprise).toLocaleDateString()
-                                : "—"}
-                            </p>
+                          {intervention.diagnostic && (
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Diagnostic</p>
+                              <p className="text-foreground">{intervention.diagnostic}</p>
+                            </div>
+                          )}
+                          {intervention.reference_envoi && (
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Shipment Reference</p>
+                              <p className="font-mono text-foreground">{intervention.reference_envoi}</p>
+                            </div>
+                          )}
+                          {intervention.reference_retour && (
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Return Reference</p>
+                              <p className="font-mono text-foreground">{intervention.reference_retour}</p>
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Date Envoi</p>
+                              <p className="flex items-center gap-1 text-foreground text-sm">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                {intervention.date_envoi_entreprise
+                                  ? new Date(intervention.date_envoi_entreprise).toLocaleDateString()
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm text-muted-foreground">Date Retour</p>
+                              <p className="flex items-center gap-1 text-foreground text-sm">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                {intervention.date_retour_final
+                                  ? new Date(intervention.date_retour_final).toLocaleDateString()
+                                  : "Pending"}
+                              </p>
+                            </div>
                           </div>
                           <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">Date Retour</p>
-                            <p className="flex items-center gap-1 text-foreground text-sm">
-                              <Calendar className="h-4 w-4 text-muted-foreground" />
-                              {intervention.date_retour_final
-                                ? new Date(intervention.date_retour_final).toLocaleDateString()
-                                : "Pending"}
-                            </p>
+                            <p className="text-sm text-muted-foreground">Result</p>
+                            {getResultBadge(intervention.resultat)}
                           </div>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground">Result</p>
-                          {getResultBadge(intervention.resultat)}
-                        </div>
 
-                        {/* Remplacements */}
-                        {intervention.remplacements && intervention.remplacements.length > 0 && (
-                          <div className="rounded-lg border border-border bg-muted/50 p-4">
-                            <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                              <ArrowRightLeft className="h-4 w-4" />
-                              Replacement Details
-                            </h4>
-                            {intervention.remplacements.map((r) => (
-                              <div key={r.id} className="mt-3 grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <p className="text-muted-foreground">Old Materiel</p>
-                                  <p className="font-medium text-foreground">#{r.ancien_materiel_id}</p>
+                          {/* Remplacements */}
+                          {intervention.remplacements && intervention.remplacements.length > 0 && (
+                            <div className="rounded-lg border border-border bg-muted/50 p-4">
+                              <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                <ArrowRightLeft className="h-4 w-4" />
+                                Replacement Details
+                              </h4>
+                              {intervention.remplacements.map((r) => (
+                                <div key={r.id} className="mt-3 space-y-3 text-sm">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-muted-foreground">Old Device</p>
+                                      <p className="font-medium text-foreground">
+                                        {r.ancienMateriel?.marque} {r.ancienMateriel?.modele}
+                                      </p>
+                                      <p className="font-mono text-xs text-muted-foreground">
+                                        #{r.ancien_materiel_id} • {r.ancienMateriel?.code_onee}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">New Device</p>
+                                      <p className="font-medium text-foreground">
+                                        {r.nouveau_marque} {r.nouveau_modele}
+                                      </p>
+                                      <p className="font-mono text-xs text-muted-foreground">
+                                        {r.nouveau_code_onee}
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="text-muted-foreground">New Materiel</p>
-                                  <p className="font-medium text-foreground">{r.nouveau_marque} {r.nouveau_modele}</p>
-                                  <p className="font-mono text-xs text-muted-foreground">{r.nouveau_code_onee}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </TableCell>
               </TableRow>
             ))
@@ -301,6 +418,83 @@ export default function InterventionsPage() {
 
   const filtered = filterList(interventionList)
 
+  const getStatusLabel = (i: Intervention) => {
+    if (i.resultat) return "Completed"
+    if (i.date_retour_drr) return "Returned"
+    if (i.date_envoi_entreprise) return "Shipped"
+    return "In Progress"
+  }
+
+  const getTypeLabel = (i: Intervention) => {
+    if (i.remplacements && i.remplacements.length > 0) return "Replacement"
+    if (i.company_name) return "External Service"
+    if (i.repare_par_admin) return "Admin Repair"
+    return "Internal Repair"
+  }
+
+  const handleExportPDF = () => {
+    const list =
+      typeFilter === "all"
+        ? filtered
+        : filterList(interventionList.filter((i) => getTypeKey(i) === typeFilter))
+
+    const doc = new jsPDF({ orientation: "landscape" })
+    const now = new Date()
+
+    doc.setFontSize(16)
+    doc.text("Interventions Report", 14, 15)
+    doc.setFontSize(10)
+    doc.setTextColor(100)
+    const filterParts: string[] = []
+    filterParts.push(`Type: ${typeFilter === "all" ? "All" : typeFilter}`)
+    filterParts.push(`Status: ${statusFilter === "all" ? "All" : statusFilter}`)
+    if (searchQuery) filterParts.push(`Search: "${searchQuery}"`)
+    doc.text(`Filters — ${filterParts.join(" | ")}`, 14, 22)
+    doc.text(`Generated: ${now.toLocaleString()}`, 14, 27)
+    doc.text(`Total: ${list.length} intervention(s)`, 14, 32)
+
+    autoTable(doc, {
+      startY: 38,
+      head: [[
+        "ID",
+        "Materiel",
+        "Probleme",
+        "Type",
+        "Status",
+        "Operator",
+        "Company",
+        "Date Envoi",
+        "Date Retour",
+        "Result",
+      ]],
+      body: list.map((i) => [
+        `#${i.id}`,
+        i.probleme?.materiel
+          ? `${i.probleme.materiel.marque} ${i.probleme.materiel.modele}`
+          : `Materiel #${i.probleme?.materiel_id ?? "-"}`,
+        `#${i.probleme_id}`,
+        getTypeLabel(i),
+        getStatusLabel(i),
+        i.operator?.name ?? `#${i.operator_id}`,
+        i.company_name ?? "-",
+        i.date_envoi_entreprise
+          ? new Date(i.date_envoi_entreprise).toLocaleDateString()
+          : "-",
+        i.date_retour_final
+          ? new Date(i.date_retour_final).toLocaleDateString()
+          : "-",
+        i.resultat ?? "Pending",
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+    })
+
+    const stamp = now.toISOString().slice(0, 19).replace(/[:T]/g, "-")
+    doc.save(`interventions-${stamp}.pdf`)
+    toast.success(`Exported ${list.length} intervention(s) to PDF`)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -308,7 +502,7 @@ export default function InterventionsPage() {
         <p className="text-muted-foreground">Track repair and replacement activities</p>
       </div>
 
-      <Tabs defaultValue="all" className="space-y-4">
+      <Tabs value={typeFilter} onValueChange={setTypeFilter} className="space-y-4">
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="internal">Internal</TabsTrigger>
@@ -339,20 +533,61 @@ export default function InterventionsPage() {
               <SelectItem value="completed">Completed</SelectItem>
             </SelectContent>
           </Select>
+          <Button onClick={handleExportPDF} variant="outline" className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Export PDF
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={backupOverdue ? "destructive" : "outline"}
+                className="relative gap-2"
+              >
+                <DatabaseBackup className="h-4 w-4" />
+                Backup
+                {backupOverdue && (
+                  <Badge className="absolute -right-2 -top-2 h-4 min-w-4 rounded-full px-1 text-[9px] font-bold bg-destructive text-destructive-foreground">
+                    Due
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Choose backup format
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleBackup("json")}>
+                <DatabaseBackup className="mr-2 h-4 w-4" />
+                JSON
+                <span className="ml-auto text-xs text-muted-foreground">Full data</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleBackup("csv")}>
+                <FileDown className="mr-2 h-4 w-4" />
+                CSV
+                <span className="ml-auto text-xs text-muted-foreground">Spreadsheet</span>
+              </DropdownMenuItem>
+              {lastBackup && (
+                <>
+                  <DropdownMenuSeparator />
+                  <p className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                    Last backup: {lastBackup.toLocaleDateString()}
+                  </p>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <TabsContent value="all" className="mt-0">
           <InterventionTable list={filtered} />
         </TabsContent>
-
         <TabsContent value="internal" className="mt-0">
           <InterventionTable list={filterList(interventionList.filter((i) => getTypeKey(i) === "internal"))} />
         </TabsContent>
-
         <TabsContent value="external" className="mt-0">
           <InterventionTable list={filterList(interventionList.filter((i) => getTypeKey(i) === "external"))} />
         </TabsContent>
-
         <TabsContent value="replacements" className="mt-0">
           <InterventionTable list={filterList(interventionList.filter((i) => getTypeKey(i) === "replacements"))} />
         </TabsContent>

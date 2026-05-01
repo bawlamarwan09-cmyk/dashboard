@@ -1,6 +1,6 @@
 "use client"
 
-import useSWR from "swr"
+import useSWR, { mutate } from "swr"
 import { useAuth } from "../auth-context"
 import {
   materielsApi,
@@ -327,4 +327,30 @@ export function useSettings() {
     token ? ["settings", token] : null,
     () => settingsApi.get(token!)
   )
+}
+
+// Cache invalidation helpers
+export function invalidateAffectationsCache(userId?: number) {
+  mutate((key) => Array.isArray(key) && key[0] === "affectations")
+  if (userId) {
+    mutate(["affectations-user", userId])
+  }
+}
+
+// Hook to handle device replacement with automatic cache refresh
+export function useDeviceReplacement() {
+  const { token } = useAuth()
+
+  const replaceDevice = async (interventionId: number, userId?: number) => {
+    if (!token) throw new Error("Not authenticated")
+
+    const result = await interventionsApi.completeReplacement(interventionId, token!)
+
+    // Invalidate cache so My Devices page updates immediately
+    invalidateAffectationsCache(userId)
+
+    return result
+  }
+
+  return { replaceDevice, invalidateAffectationsCache }
 }

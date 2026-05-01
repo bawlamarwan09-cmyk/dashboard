@@ -145,11 +145,15 @@ export default function UsersPage() {
     }
   }
 
-  const handleDeleteUser = async (id: number) => {
+  const handleDeleteUser = async (user: User) => {
     if (!token) return
     setDeleteError(null)
+    if (user.role === "ADMIN") {
+      setDeleteError(`Cannot delete "${user.name}" — admin accounts are protected.`)
+      return
+    }
     try {
-      await usersApi.delete(id, token)
+      await usersApi.delete(user.id, token)
       mutate(["users", token])
     } catch (err: any) {
       setDeleteError(err.message || "Failed to delete user")
@@ -295,8 +299,13 @@ export default function UsersPage() {
                           <KeyRound className="mr-2 h-4 w-4" />Reset Password
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteUser(user.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />Delete
+                        <DropdownMenuItem
+                          className={user.role === "ADMIN" ? "text-muted-foreground cursor-not-allowed opacity-50" : "text-destructive"}
+                          disabled={user.role === "ADMIN"}
+                          onClick={() => handleDeleteUser(user)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {user.role === "ADMIN" ? "Delete (protected)" : "Delete"}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

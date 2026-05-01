@@ -151,12 +151,7 @@ function getRedirectPath(role?: string) {
                 ) : "Sign in"}
               </Button>
 
-              <p className="text-center text-sm text-muted-foreground">
-                {"Don't have an account? "}
-                <Link href="/register" className="font-medium text-primary hover:underline">
-                  Create account
-                </Link>
-              </p>
+             
             </CardFooter>
           </form>
         </Card>

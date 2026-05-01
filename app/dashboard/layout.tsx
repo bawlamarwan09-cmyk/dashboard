@@ -8,12 +8,25 @@ import { Loader2 } from "lucide-react"
 import type { Role } from "@/lib/api"
 import { Header } from "@/components/dashboard/header"
 
+// ── Route permissions ──────────────────────────────────────────────────────
+// Only list routes that need RESTRICTED access.
+// Any route NOT listed here is accessible to ALL authenticated users.
+// COMPANY role has been removed — companies are not user accounts.
 const routePermissions: { path: string; roles: Role[] }[] = [
-  { path: "/dashboard/devices",       roles: ["ADMIN"] },
+  // Admin only
   { path: "/dashboard/users",         roles: ["ADMIN"] },
-  { path: "/dashboard/settings",      roles: ["ADMIN"] },
-  { path: "/dashboard/interventions", roles: ["ADMIN", "OPERATOR", "COMPANY"] },
-  { path: "/dashboard/my-devices",    roles: ["ADMIN", "USER"] },
+
+  // Admin + Operator (interventions — operators manage them, admins oversee)
+  { path: "/dashboard/interventions", roles: ["ADMIN", "OPERATOR"] },
+
+  // Admin + User (own devices)
+  { path: "/dashboard/my-devices",    roles: ["ADMIN", "USER" , "OPERATOR"] },
+
+  // Admin + Operator (device management)
+  { path: "/dashboard/materiels",     roles: ["ADMIN", "OPERATOR"] },
+  { path: "/dashboard/devices",       roles: ["ADMIN", "OPERATOR"] },
+
+  // /dashboard/settings — NOT listed → accessible to everyone
 ]
 
 function getAllowedRoles(pathname: string): Role[] | null {
@@ -52,12 +65,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (allowedRoles && !allowedRoles.includes(user.role as Role)) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="rounded-lg bg-destructive/10 p-6 text-center">
+        <div className="rounded-lg bg-destructive/10 p-6 text-center space-y-2">
           <h2 className="text-lg font-semibold text-destructive">Access Denied</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             You don't have permission to view this page.
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Required: {allowedRoles.join(" or ")} — Your role: {user.role}
           </p>
         </div>
@@ -66,14 +79,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-  <div className="flex h-screen overflow-hidden bg-background">
-    <Sidebar />
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <Header />
-      <main className="flex-1 overflow-y-auto p-6">
-        {children}
-      </main>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-y-auto p-6">
+          {children}
+        </main>
+      </div>
     </div>
-  </div>
-)
+  )
 }
